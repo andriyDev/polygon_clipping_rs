@@ -1,6 +1,123 @@
 use glam::Vec2;
+use rand::seq::SliceRandom;
 
-use crate::{difference, intersection, union, xor, Polygon};
+use crate::{difference, intersection, union, xor, Event, Polygon};
+
+#[test]
+fn split_edge_events_ordered_correctly() {
+  let expected_events = [
+    // Edge start events.
+    Event {
+      event_id: 100,
+      point: Vec2::new(3.0, 2.0),
+      is_subject: false,
+      left: true,
+      other_point: Vec2::new(5.0, 2.0),
+    },
+    Event {
+      event_id: 90,
+      point: Vec2::new(3.5, 1.0),
+      is_subject: true,
+      left: true,
+      other_point: Vec2::new(5.0, 3.0),
+    },
+    // Edge intersection events.
+    Event {
+      event_id: 95,
+      point: Vec2::new(4.25, 2.0),
+      is_subject: true,
+      left: false,
+      other_point: Vec2::new(3.5, 1.0),
+    },
+    Event {
+      event_id: 93,
+      point: Vec2::new(4.25, 2.0),
+      is_subject: false,
+      left: false,
+      other_point: Vec2::new(3.0, 2.0),
+    },
+    Event {
+      event_id: 105,
+      point: Vec2::new(4.25, 2.0),
+      is_subject: false,
+      left: true,
+      other_point: Vec2::new(5.0, 2.0),
+    },
+    Event {
+      event_id: 101,
+      point: Vec2::new(4.25, 2.0),
+      is_subject: true,
+      left: true,
+      other_point: Vec2::new(5.0, 3.0),
+    },
+    // Edge end events.
+    Event {
+      event_id: 97,
+      point: Vec2::new(5.0, 2.0),
+      is_subject: false,
+      left: false,
+      other_point: Vec2::new(3.0, 2.0),
+    },
+    Event {
+      event_id: 89,
+      point: Vec2::new(5.0, 3.0),
+      is_subject: true,
+      left: false,
+      other_point: Vec2::new(3.5, 1.0),
+    },
+  ];
+
+  assert!(
+    expected_events[0] < expected_events[1],
+    "left={:?} right={:?}",
+    expected_events[0],
+    expected_events[1]
+  );
+  assert!(
+    expected_events[1] < expected_events[2],
+    "left={:?} right={:?}",
+    expected_events[1],
+    expected_events[2]
+  );
+  assert!(
+    expected_events[2] < expected_events[3],
+    "left={:?} right={:?}",
+    expected_events[2],
+    expected_events[3]
+  );
+  assert!(
+    expected_events[3] < expected_events[4],
+    "left={:?} right={:?}",
+    expected_events[3],
+    expected_events[4]
+  );
+  assert!(
+    expected_events[4] < expected_events[5],
+    "left={:?} right={:?}",
+    expected_events[4],
+    expected_events[5]
+  );
+  assert!(
+    expected_events[5] < expected_events[6],
+    "left={:?} right={:?}",
+    expected_events[5],
+    expected_events[6]
+  );
+  assert!(
+    expected_events[6] < expected_events[7],
+    "left={:?} right={:?}",
+    expected_events[6],
+    expected_events[7]
+  );
+
+  let mut sorted_events = expected_events.iter().cloned().collect::<Vec<_>>();
+  sorted_events.shuffle(&mut rand::thread_rng());
+  sorted_events.sort();
+
+  dbg!(&sorted_events);
+  dbg!(&expected_events);
+  assert_eq!(sorted_events, expected_events);
+}
 
 #[test]
 fn boolean_of_rhombuses() {

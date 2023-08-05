@@ -36,3 +36,6 @@ fn perform_boolean(
 ) -> Polygon {
   todo!()
 }
+
+#[cfg(test)]
+mod tests;

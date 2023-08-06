@@ -160,6 +160,26 @@ impl Event {
   fn is_vertical(&self) -> bool {
     self.point.x == self.other_point.x
   }
+
+  // Determine whether `self` and `relation` imply the edge is in the result
+  // based on the operation.
+  fn in_result(&self, relation: &EventRelation, operation: Operation) -> bool {
+    match operation {
+      // The edge is in the result iff it is inside the other polygon, aka if
+      // the closest edge below is an out-in transition.
+      Operation::Intersection => !relation.other_in_out,
+      // The edge is in the result iff it is outside the other polygon, aka if
+      // the closest edge below is an in-out transition (or is non-existent).
+      Operation::Union => relation.other_in_out,
+      // The edge is in the result iff it is either the subject and we are
+      // outside the clip polygon (the closest edge below is an in-out
+      // transition), or it is the clip and we are inside the clip polygon (the
+      // closest edge below is an out-in transition).
+      Operation::Difference => self.is_subject == relation.other_in_out,
+      // Every edge is part of the result.
+      Operation::XOR => true,
+    }
+  }
 }
 
 // Returns whether `point` is above (Greater) or below (Less) the line defined
@@ -440,6 +460,63 @@ fn split_edge(
   edge_sibling_relation.sibling_point = point;
 
   split_2_id
+}
+
+// Determines the flags in `event_relation`. These are used to determine whether
+// edges are in the result or not. This assumes `prev_event` is already in the
+// sweep line and has had its own flags computed.
+fn set_information(
+  (event, event_relation): (&Event, &mut EventRelation),
+  prev_event: Option<(&Event, &EventRelation)>,
+  operation: Operation,
+) {
+  match prev_event {
+    None => {
+      // There is no previous event, so this must be the external contour of
+      // one of the polygons.
+      event_relation.in_out = false;
+      // Even if there is no previous event, we mark it as an in-out
+      // transition since this treats the other as being "outside".
+      event_relation.other_in_out = true;
+    }
+    Some((prev_event, prev_event_relation)) => {
+      if event.is_subject == prev_event.is_subject {
+        // The events are from the same polygon, so this event should be the
+        // opposite of `prev_event`.
+        event_relation.in_out = !prev_event_relation.in_out;
+        // The nearest other polygon's edge stays the same.
+        event_relation.other_in_out = prev_event_relation.other_in_out;
+      } else {
+        // `prev_event` is from the other polygon, so the nearest edge of its
+        // other polygon is the same as this event. Flip its sign just as
+        // above.
+        event_relation.in_out = !prev_event_relation.other_in_out;
+        event_relation.other_in_out = if !prev_event.is_vertical() {
+          // When the previous edge is not vertical, since `prev_event` is the
+          // other polygon, we just copy the in_out directly.
+          prev_event_relation.in_out
+        } else {
+          // When the previous edge is vertical, this edge really cares about
+          // the in_out transition of the top of the previous edge. For
+          // horizontal edges, this is the same as in_out, but for vertical
+          // edges, the top of the edge has the opposite in_out.
+          !prev_event_relation.in_out
+        };
+      }
+
+      // The in_result part is obvious. If the previous event is vertical, we do
+      // not want to use it as prev_in_result, since we are just skimming the
+      // edge of the polygon.
+      event_relation.prev_in_result =
+        if prev_event_relation.in_result && !prev_event.is_vertical() {
+          Some(prev_event.event_id)
+        } else {
+          prev_event_relation.prev_in_result
+        };
+    }
+  }
+
+  event_relation.in_result = event.in_result(event_relation, operation);
 }
 
 #[cfg(test)]

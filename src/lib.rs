@@ -2,6 +2,8 @@ use std::{cmp::Reverse, collections::BinaryHeap};
 
 use glam::Vec2;
 
+mod util;
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct Polygon {
   pub contours: Vec<Vec<Vec2>>,

@@ -1,7 +1,12 @@
+use std::collections::BinaryHeap;
+
 use glam::Vec2;
 use rand::seq::SliceRandom;
 
-use crate::{difference, intersection, union, xor, Event, Polygon};
+use crate::{
+  create_events_for_polygon, difference, intersection, union, xor, Event,
+  EventRelation, Polygon,
+};
 
 #[test]
 fn split_edge_events_ordered_correctly() {
@@ -117,6 +122,245 @@ fn split_edge_events_ordered_correctly() {
   dbg!(&sorted_events);
   dbg!(&expected_events);
   assert_eq!(sorted_events, expected_events);
+}
+
+#[test]
+fn creates_events_for_polygon() {
+  let polygon = Polygon {
+    contours: vec![
+      vec![
+        Vec2::new(1.0, 1.0),
+        Vec2::new(3.0, 1.0),
+        Vec2::new(3.0, 3.0),
+        Vec2::new(1.0, 3.0),
+      ],
+      vec![
+        Vec2::new(4.0, 1.0),
+        Vec2::new(5.0, 1.0),
+        Vec2::new(6.0, 2.0),
+        Vec2::new(5.0, 2.0),
+      ],
+    ],
+  };
+
+  let mut event_queue = BinaryHeap::new();
+  let mut event_relations = Vec::new();
+  create_events_for_polygon(
+    &polygon,
+    /* is_subject= */ true,
+    &mut event_queue,
+    &mut event_relations,
+  );
+  let mut event_queue = event_queue
+    .into_sorted_vec()
+    .iter()
+    .map(|event| event.0.clone())
+    .collect::<Vec<_>>();
+  // into_sorted_vec returns the sort of Reverse(Event), which is the opposite
+  // of what we want (since BinaryHeap is a max-heap).
+  event_queue.reverse();
+  assert_eq!(
+    event_queue,
+    [
+      Event {
+        event_id: 0,
+        point: Vec2::new(1.0, 1.0),
+        left: true,
+        is_subject: true,
+        other_point: Vec2::new(3.0, 1.0),
+      },
+      Event {
+        event_id: 7,
+        point: Vec2::new(1.0, 1.0),
+        left: true,
+        is_subject: true,
+        other_point: Vec2::new(1.0, 3.0),
+      },
+      Event {
+        event_id: 6,
+        point: Vec2::new(1.0, 3.0),
+        left: false,
+        is_subject: true,
+        other_point: Vec2::new(1.0, 1.0),
+      },
+      Event {
+        event_id: 5,
+        point: Vec2::new(1.0, 3.0),
+        left: true,
+        is_subject: true,
+        other_point: Vec2::new(3.0, 3.0),
+      },
+      Event {
+        event_id: 1,
+        point: Vec2::new(3.0, 1.0),
+        left: false,
+        is_subject: true,
+        other_point: Vec2::new(1.0, 1.0),
+      },
+      Event {
+        event_id: 2,
+        point: Vec2::new(3.0, 1.0),
+        left: true,
+        is_subject: true,
+        other_point: Vec2::new(3.0, 3.0),
+      },
+      Event {
+        event_id: 4,
+        point: Vec2::new(3.0, 3.0),
+        left: false,
+        is_subject: true,
+        other_point: Vec2::new(1.0, 3.0),
+      },
+      Event {
+        event_id: 3,
+        point: Vec2::new(3.0, 3.0),
+        left: false,
+        is_subject: true,
+        other_point: Vec2::new(3.0, 1.0),
+      },
+      Event {
+        event_id: 8,
+        point: Vec2::new(4.0, 1.0),
+        left: true,
+        is_subject: true,
+        other_point: Vec2::new(5.0, 1.0),
+      },
+      Event {
+        event_id: 15,
+        point: Vec2::new(4.0, 1.0),
+        left: true,
+        is_subject: true,
+        other_point: Vec2::new(5.0, 2.0),
+      },
+      Event {
+        event_id: 9,
+        point: Vec2::new(5.0, 1.0),
+        left: false,
+        is_subject: true,
+        other_point: Vec2::new(4.0, 1.0),
+      },
+      Event {
+        event_id: 10,
+        point: Vec2::new(5.0, 1.0),
+        left: true,
+        is_subject: true,
+        other_point: Vec2::new(6.0, 2.0),
+      },
+      Event {
+        event_id: 14,
+        point: Vec2::new(5.0, 2.0),
+        left: false,
+        is_subject: true,
+        other_point: Vec2::new(4.0, 1.0),
+      },
+      Event {
+        event_id: 13,
+        point: Vec2::new(5.0, 2.0),
+        left: true,
+        is_subject: true,
+        other_point: Vec2::new(6.0, 2.0),
+      },
+      Event {
+        event_id: 11,
+        point: Vec2::new(6.0, 2.0),
+        left: false,
+        is_subject: true,
+        other_point: Vec2::new(5.0, 1.0),
+      },
+      Event {
+        event_id: 12,
+        point: Vec2::new(6.0, 2.0),
+        left: false,
+        is_subject: true,
+        other_point: Vec2::new(5.0, 2.0),
+      },
+    ]
+  );
+  assert_eq!(
+    event_relations,
+    [
+      EventRelation {
+        sibling_id: 1,
+        sibling_point: Vec2::new(3.0, 1.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 0,
+        sibling_point: Vec2::new(1.0, 1.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 3,
+        sibling_point: Vec2::new(3.0, 3.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 2,
+        sibling_point: Vec2::new(3.0, 1.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 5,
+        sibling_point: Vec2::new(1.0, 3.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 4,
+        sibling_point: Vec2::new(3.0, 3.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 7,
+        sibling_point: Vec2::new(1.0, 1.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 6,
+        sibling_point: Vec2::new(1.0, 3.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 9,
+        sibling_point: Vec2::new(5.0, 1.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 8,
+        sibling_point: Vec2::new(4.0, 1.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 11,
+        sibling_point: Vec2::new(6.0, 2.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 10,
+        sibling_point: Vec2::new(5.0, 1.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 13,
+        sibling_point: Vec2::new(5.0, 2.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 12,
+        sibling_point: Vec2::new(6.0, 2.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 15,
+        sibling_point: Vec2::new(4.0, 1.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 14,
+        sibling_point: Vec2::new(5.0, 2.0),
+        ..Default::default()
+      },
+    ]
+  );
 }
 
 #[test]

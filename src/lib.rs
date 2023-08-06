@@ -1,3 +1,5 @@
+use std::{cmp::Reverse, collections::BinaryHeap};
+
 use glam::Vec2;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -30,10 +32,25 @@ enum Operation {
 }
 
 fn perform_boolean(
-  _subject: &Polygon,
-  _clip: &Polygon,
+  subject: &Polygon,
+  clip: &Polygon,
   _operation: Operation,
 ) -> Polygon {
+  let mut event_queue = BinaryHeap::new();
+  let mut event_relations = Vec::new();
+
+  create_events_for_polygon(
+    subject,
+    /* is_subject= */ true,
+    &mut event_queue,
+    &mut event_relations,
+  );
+  create_events_for_polygon(
+    clip,
+    /* is_subject= */ false,
+    &mut event_queue,
+    &mut event_relations,
+  );
   todo!()
 }
 
@@ -147,6 +164,81 @@ impl Event {
 // reversed.
 fn point_relative_to_line(a: Vec2, b: Vec2, point: Vec2) -> std::cmp::Ordering {
   0.0.partial_cmp(&(b - a).perp_dot(point - a)).unwrap()
+}
+
+// The relationship of the event to the rest of the edges. While `Event` is
+// immutable, the EventRelation can change over the course of the algorithm.
+#[derive(Default, Clone, PartialEq, Debug)]
+struct EventRelation {
+  // The ID of the point that this edge connects to. This can change through
+  // intersections.
+  sibling_id: usize,
+  // The point that this edge connects to. This can change through
+  // intersections.
+  sibling_point: Vec2,
+  // Indicates if this edge represents an inside-outside transition into the
+  // polygon.
+  in_out: bool,
+  // Same as `in_out`, but for the other polygon (if this event refers to the
+  // subject, this will refer to the clip).
+  other_in_out: bool,
+  // Whether the edge is in the result.
+  in_result: bool,
+  // The ID of the previous event in the sweep line that was in the result.
+  prev_in_result: Option<usize>,
+}
+
+// Creates a left and right event for each edge in the polygon.
+fn create_events_for_polygon(
+  polygon: &Polygon,
+  is_subject: bool,
+  event_queue: &mut BinaryHeap<Reverse<Event>>,
+  event_relations: &mut Vec<EventRelation>,
+) {
+  for contour in polygon.contours.iter() {
+    for point_index in 0..contour.len() {
+      let next_point_index =
+        if point_index == contour.len() - 1 { 0 } else { point_index + 1 };
+
+      let point_1 = contour[point_index];
+      let point_2 = contour[next_point_index];
+      let (event_1_left, event_2_left) =
+        match lex_order_points(&point_1, &point_2) {
+          std::cmp::Ordering::Equal => continue, // Ignore degenerate edges.
+          std::cmp::Ordering::Less => (true, false),
+          std::cmp::Ordering::Greater => (false, true),
+        };
+
+      let event_id_1 = event_relations.len();
+      let event_id_2 = event_relations.len() + 1;
+
+      event_queue.push(Reverse(Event {
+        event_id: event_id_1,
+        point: point_1,
+        left: event_1_left,
+        is_subject,
+        other_point: point_2,
+      }));
+      event_queue.push(Reverse(Event {
+        event_id: event_id_2,
+        point: point_2,
+        left: event_2_left,
+        is_subject,
+        other_point: point_1,
+      }));
+
+      event_relations.push(EventRelation {
+        sibling_id: event_id_2,
+        sibling_point: point_2,
+        ..Default::default()
+      });
+      event_relations.push(EventRelation {
+        sibling_id: event_id_1,
+        sibling_point: point_1,
+        ..Default::default()
+      });
+    }
+  }
 }
 
 #[cfg(test)]

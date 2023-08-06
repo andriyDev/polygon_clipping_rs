@@ -1,11 +1,11 @@
-use std::collections::BinaryHeap;
+use std::{cmp::Reverse, collections::BinaryHeap};
 
 use glam::Vec2;
 use rand::seq::SliceRandom;
 
 use crate::{
-  create_events_for_polygon, difference, intersection, union, xor, Event,
-  EventRelation, Polygon,
+  check_for_intersection, create_events_for_polygon, difference, intersection,
+  split_edge, union, xor, Event, EventRelation, Polygon,
 };
 
 #[test]
@@ -124,6 +124,20 @@ fn split_edge_events_ordered_correctly() {
   assert_eq!(sorted_events, expected_events);
 }
 
+// Consumes the `event_queue` and turns it into a sorted Vec of events.
+fn event_queue_to_vec(event_queue: BinaryHeap<Reverse<Event>>) -> Vec<Event> {
+  let mut event_queue = event_queue
+    .into_sorted_vec()
+    .iter()
+    .map(|e| e.0.clone())
+    .collect::<Vec<_>>();
+  // into_sorted_vec returns the sort of Reverse(Event), so reverse the order to
+  // get the sort order of Event.
+  event_queue.reverse();
+
+  event_queue
+}
+
 #[test]
 fn creates_events_for_polygon() {
   let polygon = Polygon {
@@ -151,14 +165,7 @@ fn creates_events_for_polygon() {
     &mut event_queue,
     &mut event_relations,
   );
-  let mut event_queue = event_queue
-    .into_sorted_vec()
-    .iter()
-    .map(|event| event.0.clone())
-    .collect::<Vec<_>>();
-  // into_sorted_vec returns the sort of Reverse(Event), which is the opposite
-  // of what we want (since BinaryHeap is a max-heap).
-  event_queue.reverse();
+  let event_queue = event_queue_to_vec(event_queue);
   assert_eq!(
     event_queue,
     [
@@ -357,6 +364,640 @@ fn creates_events_for_polygon() {
       EventRelation {
         sibling_id: 14,
         sibling_point: Vec2::new(5.0, 2.0),
+        ..Default::default()
+      },
+    ]
+  );
+}
+
+#[test]
+fn splits_edges() {
+  let mut event_queue = BinaryHeap::new();
+  let mut event_relations = vec![
+    EventRelation {
+      sibling_id: 1,
+      sibling_point: Vec2::new(1.0, 1.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 0,
+      sibling_point: Vec2::new(0.0, 0.0),
+      ..Default::default()
+    },
+  ];
+
+  const SPLIT_EDGE: Vec2 = Vec2::new(0.75, 0.75);
+  assert_eq!(
+    split_edge(
+      &Event {
+        event_id: 1,
+        point: Vec2::new(1.0, 1.0),
+        left: true,
+        is_subject: true,
+        other_point: Vec2::new(0.0, 0.0),
+      },
+      SPLIT_EDGE,
+      &mut event_queue,
+      &mut event_relations,
+    ),
+    3
+  );
+
+  let event_queue = event_queue_to_vec(event_queue);
+  assert_eq!(
+    event_queue,
+    [
+      Event {
+        event_id: 2,
+        point: SPLIT_EDGE,
+        left: false,
+        is_subject: true,
+        other_point: Vec2::new(0.0, 0.0),
+      },
+      Event {
+        event_id: 3,
+        point: SPLIT_EDGE,
+        left: true,
+        is_subject: true,
+        other_point: Vec2::new(1.0, 1.0),
+      }
+    ]
+  );
+  assert_eq!(
+    event_relations,
+    [
+      EventRelation {
+        sibling_id: 3,
+        sibling_point: SPLIT_EDGE,
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 2,
+        sibling_point: SPLIT_EDGE,
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 1,
+        sibling_point: Vec2::new(1.0, 1.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 0,
+        sibling_point: Vec2::new(0.0, 0.0),
+        ..Default::default()
+      },
+    ]
+  );
+}
+
+#[test]
+fn check_for_intersection_finds_no_intersection() {
+  let mut event_queue = BinaryHeap::new();
+  let mut event_relations = vec![
+    EventRelation {
+      sibling_id: 1,
+      sibling_point: Vec2::new(3.0, 4.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 0,
+      sibling_point: Vec2::new(1.0, 2.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 3,
+      sibling_point: Vec2::new(3.0, 3.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 2,
+      sibling_point: Vec2::new(1.0, 1.0),
+      ..Default::default()
+    },
+  ];
+  let expected_event_relations = event_relations.clone();
+
+  check_for_intersection(
+    &Event {
+      event_id: 0,
+      point: Vec2::new(1.0, 2.0),
+      left: true,
+      is_subject: false,
+      other_point: Vec2::new(3.0, 4.0),
+    },
+    &Event {
+      event_id: 2,
+      point: Vec2::new(1.0, 1.0),
+      left: true,
+      is_subject: true,
+      other_point: Vec2::new(3.0, 3.0),
+    },
+    &mut event_queue,
+    &mut event_relations,
+  );
+
+  // No new events.
+  let event_queue = event_queue_to_vec(event_queue);
+  assert_eq!(event_queue, []);
+  assert_eq!(event_relations, expected_event_relations);
+}
+
+#[test]
+fn check_for_intersection_finds_point_intersection() {
+  let mut event_queue = BinaryHeap::new();
+  let mut event_relations = vec![
+    EventRelation {
+      sibling_id: 1,
+      sibling_point: Vec2::new(3.0, 3.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 0,
+      sibling_point: Vec2::new(1.0, 2.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 3,
+      sibling_point: Vec2::new(3.0, 4.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 2,
+      sibling_point: Vec2::new(1.0, 1.0),
+      ..Default::default()
+    },
+  ];
+
+  check_for_intersection(
+    &Event {
+      event_id: 0,
+      point: Vec2::new(1.0, 2.0),
+      left: true,
+      is_subject: false,
+      other_point: Vec2::new(3.0, 3.0),
+    },
+    &Event {
+      event_id: 2,
+      point: Vec2::new(1.0, 1.0),
+      left: true,
+      is_subject: true,
+      other_point: Vec2::new(3.0, 4.0),
+    },
+    &mut event_queue,
+    &mut event_relations,
+  );
+
+  let event_queue = event_queue_to_vec(event_queue);
+  assert_eq!(
+    event_queue,
+    [
+      Event {
+        event_id: 6,
+        point: Vec2::new(2.0, 2.5),
+        left: false,
+        is_subject: false,
+        other_point: Vec2::new(1.0, 2.0),
+      },
+      Event {
+        event_id: 4,
+        point: Vec2::new(2.0, 2.5),
+        left: false,
+        is_subject: false,
+        other_point: Vec2::new(1.0, 2.0),
+      },
+      Event {
+        event_id: 5,
+        point: Vec2::new(2.0, 2.5),
+        left: true,
+        is_subject: false,
+        other_point: Vec2::new(3.0, 3.0),
+      },
+      Event {
+        event_id: 7,
+        point: Vec2::new(2.0, 2.5),
+        left: true,
+        is_subject: false,
+        other_point: Vec2::new(3.0, 3.0),
+      },
+    ]
+  );
+  assert_eq!(
+    event_relations,
+    [
+      EventRelation {
+        sibling_id: 4,
+        sibling_point: Vec2::new(2.0, 2.5),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 5,
+        sibling_point: Vec2::new(2.0, 2.5),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 6,
+        sibling_point: Vec2::new(2.0, 2.5),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 7,
+        sibling_point: Vec2::new(2.0, 2.5),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 0,
+        sibling_point: Vec2::new(1.0, 2.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 1,
+        sibling_point: Vec2::new(3.0, 3.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 2,
+        sibling_point: Vec2::new(1.0, 1.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 3,
+        sibling_point: Vec2::new(3.0, 4.0),
+        ..Default::default()
+      },
+    ]
+  );
+}
+
+#[test]
+fn check_for_intersection_finds_fully_overlapped_line() {
+  let mut event_queue = BinaryHeap::new();
+  let original_event_relations = vec![
+    EventRelation {
+      sibling_id: 1,
+      sibling_point: Vec2::new(3.0, 3.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 0,
+      sibling_point: Vec2::new(0.0, 0.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 3,
+      sibling_point: Vec2::new(2.0, 2.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 2,
+      sibling_point: Vec2::new(1.0, 1.0),
+      ..Default::default()
+    },
+  ];
+
+  let mut event_relations = original_event_relations.clone();
+  check_for_intersection(
+    &Event {
+      event_id: 0,
+      point: Vec2::new(0.0, 0.0),
+      left: true,
+      is_subject: false,
+      other_point: Vec2::new(3.0, 3.0),
+    },
+    &Event {
+      event_id: 2,
+      point: Vec2::new(1.0, 1.0),
+      left: true,
+      is_subject: true,
+      other_point: Vec2::new(2.0, 2.0),
+    },
+    &mut event_queue,
+    &mut event_relations,
+  );
+
+  let event_queue = event_queue_to_vec(event_queue);
+  let expected_event_queue = [
+    Event {
+      event_id: 6,
+      point: Vec2::new(1.0, 1.0),
+      left: false,
+      is_subject: false,
+      other_point: Vec2::new(0.0, 0.0),
+    },
+    Event {
+      event_id: 7,
+      point: Vec2::new(1.0, 1.0),
+      left: true,
+      is_subject: false,
+      other_point: Vec2::new(2.0, 2.0),
+    },
+    Event {
+      event_id: 4,
+      point: Vec2::new(2.0, 2.0),
+      left: false,
+      is_subject: false,
+      other_point: Vec2::new(0.0, 0.0),
+    },
+    Event {
+      event_id: 5,
+      point: Vec2::new(2.0, 2.0),
+      left: true,
+      is_subject: false,
+      other_point: Vec2::new(3.0, 3.0),
+    },
+  ];
+  assert_eq!(event_queue, expected_event_queue);
+  let expected_event_relations = [
+    EventRelation {
+      sibling_id: 6,
+      sibling_point: Vec2::new(1.0, 1.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 5,
+      sibling_point: Vec2::new(2.0, 2.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 3,
+      sibling_point: Vec2::new(2.0, 2.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 2,
+      sibling_point: Vec2::new(1.0, 1.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 7,
+      sibling_point: Vec2::new(1.0, 1.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 1,
+      sibling_point: Vec2::new(3.0, 3.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 0,
+      sibling_point: Vec2::new(0.0, 0.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 4,
+      sibling_point: Vec2::new(2.0, 2.0),
+      ..Default::default()
+    },
+  ];
+  assert_eq!(event_relations, expected_event_relations);
+
+  let mut event_queue = BinaryHeap::new();
+  event_relations = original_event_relations.clone();
+  check_for_intersection(
+    &Event {
+      event_id: 2,
+      point: Vec2::new(1.0, 1.0),
+      left: true,
+      is_subject: true,
+      other_point: Vec2::new(2.0, 2.0),
+    },
+    &Event {
+      event_id: 0,
+      point: Vec2::new(0.0, 0.0),
+      left: true,
+      is_subject: false,
+      other_point: Vec2::new(3.0, 3.0),
+    },
+    &mut event_queue,
+    &mut event_relations,
+  );
+
+  let event_queue = event_queue_to_vec(event_queue);
+  assert_eq!(event_queue, expected_event_queue);
+  assert_eq!(event_relations, expected_event_relations);
+}
+
+#[test]
+fn check_for_intersection_finds_partially_overlapped_lines() {
+  let mut event_queue = BinaryHeap::new();
+  let original_event_relations = vec![
+    EventRelation {
+      sibling_id: 1,
+      sibling_point: Vec2::new(2.0, 2.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 0,
+      sibling_point: Vec2::new(0.0, 0.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 3,
+      sibling_point: Vec2::new(3.0, 3.0),
+      ..Default::default()
+    },
+    EventRelation {
+      sibling_id: 2,
+      sibling_point: Vec2::new(1.0, 1.0),
+      ..Default::default()
+    },
+  ];
+
+  let mut event_relations = original_event_relations.clone();
+  check_for_intersection(
+    &Event {
+      event_id: 0,
+      point: Vec2::new(0.0, 0.0),
+      left: true,
+      is_subject: false,
+      other_point: Vec2::new(2.0, 2.0),
+    },
+    &Event {
+      event_id: 2,
+      point: Vec2::new(1.0, 1.0),
+      left: true,
+      is_subject: true,
+      other_point: Vec2::new(3.0, 3.0),
+    },
+    &mut event_queue,
+    &mut event_relations,
+  );
+
+  let event_queue = event_queue_to_vec(event_queue);
+  assert_eq!(
+    event_queue,
+    [
+      Event {
+        event_id: 4,
+        point: Vec2::new(1.0, 1.0),
+        left: false,
+        is_subject: false,
+        other_point: Vec2::new(0.0, 0.0),
+      },
+      Event {
+        event_id: 5,
+        point: Vec2::new(1.0, 1.0),
+        left: true,
+        is_subject: false,
+        other_point: Vec2::new(3.0, 3.0),
+      },
+      Event {
+        event_id: 6,
+        point: Vec2::new(2.0, 2.0),
+        left: false,
+        is_subject: false,
+        other_point: Vec2::new(0.0, 0.0),
+      },
+      Event {
+        event_id: 7,
+        point: Vec2::new(2.0, 2.0),
+        left: true,
+        is_subject: false,
+        other_point: Vec2::new(3.0, 3.0),
+      },
+    ]
+  );
+  assert_eq!(
+    event_relations,
+    [
+      EventRelation {
+        sibling_id: 4,
+        sibling_point: Vec2::new(1.0, 1.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 5,
+        sibling_point: Vec2::new(1.0, 1.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 6,
+        sibling_point: Vec2::new(2.0, 2.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 7,
+        sibling_point: Vec2::new(2.0, 2.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 0,
+        sibling_point: Vec2::new(0.0, 0.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 1,
+        sibling_point: Vec2::new(2.0, 2.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 2,
+        sibling_point: Vec2::new(1.0, 1.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 3,
+        sibling_point: Vec2::new(3.0, 3.0),
+        ..Default::default()
+      },
+    ]
+  );
+
+  let mut event_queue = BinaryHeap::new();
+  event_relations = original_event_relations.clone();
+  check_for_intersection(
+    &Event {
+      event_id: 2,
+      point: Vec2::new(1.0, 1.0),
+      left: true,
+      is_subject: true,
+      other_point: Vec2::new(3.0, 3.0),
+    },
+    &Event {
+      event_id: 0,
+      point: Vec2::new(0.0, 0.0),
+      left: true,
+      is_subject: false,
+      other_point: Vec2::new(2.0, 2.0),
+    },
+    &mut event_queue,
+    &mut event_relations,
+  );
+
+  let event_queue = event_queue_to_vec(event_queue);
+  assert_eq!(
+    event_queue,
+    [
+      Event {
+        event_id: 6,
+        point: Vec2::new(1.0, 1.0),
+        left: false,
+        is_subject: false,
+        other_point: Vec2::new(0.0, 0.0),
+      },
+      Event {
+        event_id: 7,
+        point: Vec2::new(1.0, 1.0),
+        left: true,
+        is_subject: false,
+        other_point: Vec2::new(2.0, 2.0),
+      },
+      Event {
+        event_id: 4,
+        point: Vec2::new(2.0, 2.0),
+        left: false,
+        is_subject: true,
+        other_point: Vec2::new(1.0, 1.0),
+      },
+      Event {
+        event_id: 5,
+        point: Vec2::new(2.0, 2.0),
+        left: true,
+        is_subject: true,
+        other_point: Vec2::new(3.0, 3.0),
+      },
+    ]
+  );
+  assert_eq!(
+    event_relations,
+    [
+      EventRelation {
+        sibling_id: 6,
+        sibling_point: Vec2::new(1.0, 1.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 7,
+        sibling_point: Vec2::new(1.0, 1.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 4,
+        sibling_point: Vec2::new(2.0, 2.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 5,
+        sibling_point: Vec2::new(2.0, 2.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 2,
+        sibling_point: Vec2::new(1.0, 1.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 3,
+        sibling_point: Vec2::new(3.0, 3.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 0,
+        sibling_point: Vec2::new(0.0, 0.0),
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 1,
+        sibling_point: Vec2::new(2.0, 2.0),
         ..Default::default()
       },
     ]

@@ -1,6 +1,7 @@
 use std::{cmp::Reverse, collections::BinaryHeap};
 
 use glam::Vec2;
+use util::{edge_intersection, EdgeIntersectionResult};
 
 mod util;
 
@@ -313,6 +314,132 @@ impl SweepLineEvent {
       )
       .is_eq()
   }
+}
+
+// Check for intersections between two events in the sweep line. `new_event` is
+// the event just inserted into the sweep line and `existing_event` is the event
+// that was already in the sweep line.
+fn check_for_intersection(
+  new_event: &Event,
+  existing_event: &Event,
+  event_queue: &mut BinaryHeap<Reverse<Event>>,
+  event_relations: &mut Vec<EventRelation>,
+) {
+  match edge_intersection(
+    (new_event.point, event_relations[new_event.event_id].sibling_point),
+    (
+      existing_event.point,
+      event_relations[existing_event.event_id].sibling_point,
+    ),
+  ) {
+    EdgeIntersectionResult::NoIntersection => {} // Do nothing.
+    EdgeIntersectionResult::PointIntersection(point) => {
+      // Split the edges, but only if the the split point isn't at an end point.
+      if point != new_event.point
+        && point != event_relations[new_event.event_id].sibling_point
+      {
+        split_edge(new_event, point, event_queue, event_relations);
+      }
+      if point != existing_event.point
+        && point != event_relations[existing_event.event_id].sibling_point
+      {
+        split_edge(existing_event, point, event_queue, event_relations);
+      }
+    }
+    EdgeIntersectionResult::LineIntersection(start, end) => {
+      match (
+        start == new_event.point,
+        end == event_relations[new_event.event_id].sibling_point,
+      ) {
+        (true, true) => {
+          // The edge is fully covered, so no new splits are necessary.
+        }
+        (false, false) => {
+          split_edge(new_event, end, event_queue, event_relations);
+          split_edge(new_event, start, event_queue, event_relations);
+        }
+        (true, false) => {
+          split_edge(new_event, end, event_queue, event_relations);
+        }
+        (false, true) => {
+          split_edge(new_event, start, event_queue, event_relations);
+        }
+      }
+
+      match (
+        start == existing_event.point,
+        end == event_relations[existing_event.event_id].sibling_point,
+      ) {
+        (true, true) => {
+          // The edge is fully covered, so no new splits are necessary.
+        }
+        (false, false) => {
+          split_edge(existing_event, end, event_queue, event_relations);
+          split_edge(existing_event, start, event_queue, event_relations);
+        }
+        (true, false) => {
+          split_edge(existing_event, end, event_queue, event_relations);
+        }
+        (false, true) => {
+          split_edge(existing_event, start, event_queue, event_relations);
+        }
+      }
+    }
+  }
+}
+
+// Splits an edge into two parts at `point`. Siblings are updated for the
+// existing events and new events are generated. Returns the index of the left
+// event of the new edge.
+fn split_edge(
+  edge_event: &Event,
+  point: Vec2,
+  event_queue: &mut BinaryHeap<Reverse<Event>>,
+  event_relations: &mut Vec<EventRelation>,
+) -> usize {
+  let (sibling_id, sibling_point) = {
+    let relation = &event_relations[edge_event.event_id];
+    (relation.sibling_id, relation.sibling_point)
+  };
+
+  let split_1_id = event_relations.len();
+  let split_2_id = event_relations.len() + 1;
+
+  event_queue.push(Reverse(Event {
+    event_id: split_1_id,
+    point,
+    left: false,
+    is_subject: edge_event.is_subject,
+    other_point: edge_event.point,
+  }));
+  event_queue.push(Reverse(Event {
+    event_id: split_2_id,
+    point,
+    left: true,
+    is_subject: edge_event.is_subject,
+    other_point: edge_event.other_point,
+  }));
+
+  event_relations.push(EventRelation {
+    sibling_id: edge_event.event_id,
+    sibling_point: edge_event.point,
+    ..Default::default()
+  });
+  event_relations.push(EventRelation {
+    sibling_id,
+    sibling_point,
+    ..Default::default()
+  });
+
+  let edge_event_relation = &mut event_relations[edge_event.event_id];
+  edge_event_relation.sibling_id = split_1_id;
+  edge_event_relation.sibling_point = point;
+
+  let edge_sibling_relation = &mut event_relations[sibling_id];
+  edge_sibling_relation.sibling_id = split_2_id;
+  edge_sibling_relation.sibling_point = point;
+
+  split_2_id
 }
 
 #[cfg(test)]

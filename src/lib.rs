@@ -37,7 +37,7 @@ enum Operation {
 fn perform_boolean(
   subject: &Polygon,
   clip: &Polygon,
-  _operation: Operation,
+  operation: Operation,
 ) -> Polygon {
   let mut event_queue = BinaryHeap::new();
   let mut event_relations = Vec::new();
@@ -54,6 +54,9 @@ fn perform_boolean(
     &mut event_queue,
     &mut event_relations,
   );
+
+  let result_events =
+    subdivide_edges(event_queue, &mut event_relations, operation);
   todo!()
 }
 
@@ -517,6 +520,121 @@ fn set_information(
   }
 
   event_relation.in_result = event.in_result(event_relation, operation);
+}
+
+// Goes through the `event_queue` and subdivides intersecting edges. Returns a
+// Vec of events corresponding to the edges that are in the final result based
+// on `operation`.
+fn subdivide_edges(
+  mut event_queue: BinaryHeap<Reverse<Event>>,
+  event_relations: &mut Vec<EventRelation>,
+  operation: Operation,
+) -> Vec<Event> {
+  let mut sweep_line = Vec::new();
+  let mut result = Vec::new();
+  while let Some(Reverse(event)) = event_queue.pop() {
+    if event.left {
+      let sweep_line_event = SweepLineEvent(event.clone());
+      let pos = sweep_line
+        .binary_search(&sweep_line_event)
+        .expect_err("event is new and must be inserted");
+      sweep_line.insert(pos, sweep_line_event);
+      if pos == 0 {
+        set_information(
+          (&event, &mut event_relations[event.event_id]),
+          /* prev_event= */ None,
+          operation,
+        )
+      } else {
+        let prev_event = &sweep_line[pos - 1].0;
+        {
+          let (event_relation, prev_event_relation) = borrow_two_mut(
+            event_relations,
+            event.event_id,
+            prev_event.event_id,
+          );
+          set_information(
+            (&event, event_relation),
+            Some((prev_event, prev_event_relation)),
+            operation,
+          );
+        }
+        // TODO: See if it matters that we reordered prev and next checks.
+        check_for_intersection(
+          &event,
+          prev_event,
+          &mut event_queue,
+          event_relations,
+        );
+      }
+      if pos + 1 < sweep_line.len() {
+        // If the inserted event isn't last, check for intersection with next
+        // event.
+        let next_event = &sweep_line[pos + 1].0;
+        check_for_intersection(
+          &event,
+          next_event,
+          &mut event_queue,
+          event_relations,
+        );
+      }
+    } else {
+      // The right edge event is in the result if its left edge event is also in
+      // the result.
+      event_relations[event.event_id].in_result =
+        event_relations[event_relations[event.event_id].sibling_id].in_result;
+      let pos = sweep_line
+        .binary_search(&order_sibling(&event, &event_relations[event.event_id]))
+        .expect("this is a right event, so the left event must have already been inserted.");
+      sweep_line.remove(pos);
+      if 0 < pos && pos < sweep_line.len() {
+        let (prev_event, next_event) =
+          (&sweep_line[pos - 1].0, &sweep_line[pos].0);
+        check_for_intersection(
+          prev_event,
+          next_event,
+          &mut event_queue,
+          event_relations,
+        );
+      }
+    }
+
+    if event_relations[event.event_id].in_result {
+      result.push(event);
+    }
+  }
+
+  result
+}
+
+// Borrows two elements from a slice mutably. It should be unreachable to ever
+// call this with two of the same index.
+fn borrow_two_mut<T>(slice: &mut [T], a: usize, b: usize) -> (&mut T, &mut T) {
+  if a < b {
+    let (left, right) = slice.split_at_mut(b);
+    (&mut left[a], &mut right[0])
+  } else if b < a {
+    let (left, right) = slice.split_at_mut(a);
+    (&mut right[0], &mut left[b])
+  } else {
+    unreachable!();
+  }
+}
+
+// Derives a SweepLineEvent corresponding to the sibling of `event`. `event` is
+// assumed to be a right event (since that is the only time you need to
+// determine the order sibling).
+fn order_sibling(
+  event: &Event,
+  event_relation: &EventRelation,
+) -> SweepLineEvent {
+  SweepLineEvent(Event {
+    event_id: event_relation.sibling_id,
+    point: event_relation.sibling_point,
+    left: true,
+    is_subject: event.is_subject,
+    other_point: event.point,
+  })
 }
 
 #[cfg(test)]

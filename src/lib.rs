@@ -1,4 +1,7 @@
-use std::{cmp::Reverse, collections::BinaryHeap};
+use std::{
+  cmp::Reverse,
+  collections::{BinaryHeap, HashMap},
+};
 
 use glam::Vec2;
 use util::{edge_intersection, EdgeIntersectionResult};
@@ -57,7 +60,7 @@ fn perform_boolean(
 
   let result_events =
     subdivide_edges(event_queue, &mut event_relations, operation);
-  todo!()
+  join_contours(result_events, event_relations, operation)
 }
 
 // An "event" of an edge. Each edge of a polygon is comprised of a "left" event
@@ -182,6 +185,45 @@ impl Event {
       // Every edge is part of the result.
       Operation::XOR => true,
     }
+  }
+
+  // Determines whether `self` and `relation` that are in the result is an
+  // in-out transition or not.
+  fn result_in_out(
+    &self,
+    relation: &EventRelation,
+    operation: Operation,
+  ) -> bool {
+    // These variables make the logic below more intuitive (e.g. a && b for
+    // intersection).
+    let is_inside_self = !relation.in_out;
+    let is_inside_other = !relation.other_in_out;
+
+    // For all of these cases, we already know the edge is in the result.
+    let result_out_in = match operation {
+      // The edge is an out-in transition iff we are inside both this polygon
+      // and the other polygon.
+      Operation::Intersection => is_inside_self && is_inside_other,
+      // The edge is an out-in transition iff we are inside either this polygon
+      // or the other polygon.
+      Operation::Union => is_inside_self || is_inside_other,
+      // The edge is an out-in transition iff we are in the subject polygon and
+      // not in the clip polygon (nothing was subtracted), or we are in the clip
+      // polygon and not in the subject (since we know the edge is in the
+      // result, we must have just left the subject polygon).
+      Operation::Difference => {
+        if self.is_subject {
+          is_inside_self && !is_inside_other
+        } else {
+          !is_inside_self && is_inside_other
+        }
+      }
+      // The edge is an out-in transition iff the polygons are in opposite
+      // states.
+      Operation::XOR => is_inside_self != is_inside_other,
+    };
+
+    !result_out_in
   }
 }
 
@@ -635,6 +677,181 @@ fn order_sibling(
     is_subject: event.is_subject,
     other_point: event.point,
   })
+}
+
+// The flags for each event used to derive contours.
+#[derive(Default)]
+struct EventContourFlags {
+  // The index into the result events that this event corresponds to.
+  result_id: usize,
+  // Whether this event corresponds to an in-out transition of the output
+  // polygon.
+  result_in_out: bool,
+  // The ID of the contour this event belongs to.
+  contour_id: usize,
+  // The ID of the parent contour if it exists.
+  parent_id: Option<usize>,
+  // Whether this event has already been processed - events do not need to be
+  // processed multipled times.
+  processed: bool,
+  // The depth of the contour. Even if a shell, odd if a hole.
+  depth: u32,
+}
+
+// Computes the depth and the ID of the parent contour (if the parent exists).
+fn compute_depth(
+  event: &Event,
+  event_relations: &[EventRelation],
+  event_id_to_contour_flags: &HashMap<usize, EventContourFlags>,
+) -> (u32, Option<usize>) {
+  match event_relations[event.event_id].prev_in_result {
+    None => (0, None),
+    Some(prev_in_result) => {
+      let prev_contour_flags = &event_id_to_contour_flags[&prev_in_result];
+
+      if !prev_contour_flags.result_in_out {
+        (prev_contour_flags.depth + 1, Some(prev_contour_flags.contour_id))
+      } else {
+        (prev_contour_flags.depth, prev_contour_flags.parent_id)
+      }
+    }
+  }
+}
+
+// Computes the contour starting at `start_event`. Events that are part of the
+// contour will be assigned the `depth`, `contour_id`, and `parent_contour_id`.
+fn compute_contour(
+  start_event: &Event,
+  contour_id: usize,
+  depth: u32,
+  parent_contour_id: Option<usize>,
+  event_relations: &[EventRelation],
+  event_id_to_contour_flags: &mut HashMap<usize, EventContourFlags>,
+  result_events: &[Event],
+) -> Vec<Vec2> {
+  let mut contour = Vec::new();
+  contour.push(start_event.point);
+  let mut current_event = event_to_sibling_and_mark(
+    start_event,
+    contour_id,
+    depth,
+    parent_contour_id,
+    event_relations,
+    event_id_to_contour_flags,
+    &result_events,
+  );
+
+  while current_event.point != start_event.point {
+    contour.push(current_event.point);
+    let result_id =
+      event_id_to_contour_flags[&current_event.event_id].result_id;
+    if 0 < result_id
+      && result_events[result_id - 1].point == current_event.point
+    {
+      current_event = &result_events[result_id - 1];
+      event_id_to_contour_flags
+        .get_mut(&current_event.event_id)
+        .unwrap()
+        .processed = true;
+    } else {
+      // One of the adjacent events in `result_events` must be connected to
+      // the current event, panic otherwise.
+      debug_assert!(result_id + 1 < result_events.len());
+      debug_assert_eq!(
+        result_events[result_id + 1].point,
+        current_event.point,
+        "result_id={}, event_id={}",
+        result_id,
+        current_event.event_id,
+      );
+      current_event = &result_events[result_id + 1];
+      event_id_to_contour_flags
+        .get_mut(&current_event.event_id)
+        .unwrap()
+        .processed = true;
+    }
+    current_event = event_to_sibling_and_mark(
+      current_event,
+      contour_id,
+      depth,
+      parent_contour_id,
+      &event_relations,
+      event_id_to_contour_flags,
+      &result_events,
+    );
+  }
+
+  contour
+}
+
+// Finds the sibling of `event`, sets its flags to match the provided arguments,
+// and returns the sibling event.
+fn event_to_sibling_and_mark<'a>(
+  event: &Event,
+  contour_id: usize,
+  depth: u32,
+  parent_contour_id: Option<usize>,
+  event_relations: &[EventRelation],
+  event_id_to_contour_flags: &mut HashMap<usize, EventContourFlags>,
+  result_events: &'a [Event],
+) -> &'a Event {
+  let sibling_id = event_relations[event.event_id].sibling_id;
+  let contour_relation =
+    event_id_to_contour_flags.get_mut(&sibling_id).unwrap();
+  contour_relation.processed = true;
+  contour_relation.contour_id = contour_id;
+  contour_relation.depth = depth;
+  contour_relation.parent_id = parent_contour_id;
+  &result_events[contour_relation.result_id]
+}
+
+// Determines the contours of the result polygon from the `result_events`.
+fn join_contours(
+  result_events: Vec<Event>,
+  event_relations: Vec<EventRelation>,
+  operation: Operation,
+) -> Polygon {
+  let mut event_id_to_contour_flags = result_events
+    .iter()
+    .enumerate()
+    .map(|(result_id, event)| {
+      let event_meta = &event_relations[event.event_id];
+      (
+        event.event_id,
+        EventContourFlags {
+          result_id,
+          result_in_out: event.result_in_out(event_meta, operation),
+          ..Default::default()
+        },
+      )
+    })
+    .collect::<HashMap<_, _>>();
+
+  let mut contours = Vec::new();
+  for result_event in result_events.iter() {
+    if event_id_to_contour_flags[&result_event.event_id].processed {
+      continue;
+    }
+    let (depth, parent_contour_id) =
+      compute_depth(result_event, &event_relations, &event_id_to_contour_flags);
+    let mut contour = compute_contour(
+      result_event,
+      contours.len(),
+      depth,
+      parent_contour_id,
+      &event_relations,
+      &mut event_id_to_contour_flags,
+      &result_events,
+    );
+
+    if depth % 2 == 1 {
+      contour.reverse();
+    }
+
+    contours.push(contour);
+  }
+
+  Polygon { contours }
 }
 
 #[cfg(test)]

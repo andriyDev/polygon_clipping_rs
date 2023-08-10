@@ -5,7 +5,8 @@ use rand::seq::SliceRandom;
 
 use crate::{
   check_for_intersection, create_events_for_polygon, difference, intersection,
-  split_edge, union, xor, Event, EventRelation, Polygon,
+  split_edge, union, xor, EdgeCoincidenceType, Event, EventRelation, Operation,
+  Polygon,
 };
 
 #[test]
@@ -494,6 +495,7 @@ fn check_for_intersection_finds_no_intersection() {
     },
     &mut event_queue,
     &mut event_relations,
+    Operation::Union,
   );
 
   // No new events.
@@ -545,6 +547,7 @@ fn check_for_intersection_finds_point_intersection() {
     },
     &mut event_queue,
     &mut event_relations,
+    Operation::Union,
   );
 
   let event_queue = event_queue_to_vec(event_queue);
@@ -635,6 +638,8 @@ fn check_for_intersection_finds_fully_overlapped_line() {
     EventRelation {
       sibling_id: 1,
       sibling_point: Vec2::new(3.0, 3.0),
+      in_out: true,
+      prev_in_result: Some(1337),
       ..Default::default()
     },
     EventRelation {
@@ -645,6 +650,8 @@ fn check_for_intersection_finds_fully_overlapped_line() {
     EventRelation {
       sibling_id: 3,
       sibling_point: Vec2::new(2.0, 2.0),
+      in_out: false,
+      prev_in_result: Some(420),
       ..Default::default()
     },
     EventRelation {
@@ -672,6 +679,7 @@ fn check_for_intersection_finds_fully_overlapped_line() {
     },
     &mut event_queue,
     &mut event_relations,
+    Operation::Union,
   );
 
   let event_queue = event_queue_to_vec(event_queue);
@@ -710,6 +718,8 @@ fn check_for_intersection_finds_fully_overlapped_line() {
     EventRelation {
       sibling_id: 6,
       sibling_point: Vec2::new(1.0, 1.0),
+      in_out: true,
+      prev_in_result: Some(1337),
       ..Default::default()
     },
     EventRelation {
@@ -720,6 +730,10 @@ fn check_for_intersection_finds_fully_overlapped_line() {
     EventRelation {
       sibling_id: 3,
       sibling_point: Vec2::new(2.0, 2.0),
+      prev_in_result: Some(420),
+      // Event 2 is the existing event, but is not in the result, so this is a
+      // duplicate.
+      edge_coincidence_type: EdgeCoincidenceType::DuplicateCoincidence,
       ..Default::default()
     },
     EventRelation {
@@ -745,6 +759,11 @@ fn check_for_intersection_finds_fully_overlapped_line() {
     EventRelation {
       sibling_id: 4,
       sibling_point: Vec2::new(2.0, 2.0),
+      // The event should copy the prev_in_result from event 2.
+      prev_in_result: Some(420),
+      // This event comes from event 0 which is the new event, so this will be
+      // the "primary" coincident edge.
+      edge_coincidence_type: EdgeCoincidenceType::DifferentTransition,
       ..Default::default()
     },
   ];
@@ -769,11 +788,40 @@ fn check_for_intersection_finds_fully_overlapped_line() {
     },
     &mut event_queue,
     &mut event_relations,
+    Operation::Union,
   );
 
   let event_queue = event_queue_to_vec(event_queue);
   assert_eq!(event_queue, expected_event_queue);
-  assert_eq!(event_relations, expected_event_relations);
+  assert_eq!(
+    event_relations,
+    [
+      expected_event_relations[0].clone(),
+      expected_event_relations[1].clone(),
+      EventRelation {
+        sibling_id: 3,
+        sibling_point: Vec2::new(2.0, 2.0),
+        // `prev_in_result` was copied from event 0, since that is the existing
+        // event.
+        prev_in_result: Some(1337),
+        // Event 2 is the new event (and the existing event is not in the
+        // result), so it will be the "primary" coincident edge.
+        edge_coincidence_type: EdgeCoincidenceType::DifferentTransition,
+        ..Default::default()
+      },
+      expected_event_relations[3].clone(),
+      expected_event_relations[4].clone(),
+      expected_event_relations[5].clone(),
+      expected_event_relations[6].clone(),
+      EventRelation {
+        sibling_id: 4,
+        sibling_point: Vec2::new(2.0, 2.0),
+        prev_in_result: None,
+        edge_coincidence_type: EdgeCoincidenceType::DuplicateCoincidence,
+        ..Default::default()
+      },
+    ]
+  );
 }
 
 #[test]
@@ -783,6 +831,8 @@ fn check_for_intersection_finds_partially_overlapped_lines() {
     EventRelation {
       sibling_id: 1,
       sibling_point: Vec2::new(2.0, 2.0),
+      in_out: false,
+      prev_in_result: Some(1337),
       ..Default::default()
     },
     EventRelation {
@@ -793,6 +843,9 @@ fn check_for_intersection_finds_partially_overlapped_lines() {
     EventRelation {
       sibling_id: 3,
       sibling_point: Vec2::new(3.0, 3.0),
+      in_out: false,
+      in_result: true,
+      prev_in_result: Some(420),
       ..Default::default()
     },
     EventRelation {
@@ -820,6 +873,7 @@ fn check_for_intersection_finds_partially_overlapped_lines() {
     },
     &mut event_queue,
     &mut event_relations,
+    Operation::Intersection,
   );
 
   let event_queue = event_queue_to_vec(event_queue);
@@ -862,6 +916,7 @@ fn check_for_intersection_finds_partially_overlapped_lines() {
       EventRelation {
         sibling_id: 4,
         sibling_point: Vec2::new(1.0, 1.0),
+        prev_in_result: Some(1337),
         ..Default::default()
       },
       EventRelation {
@@ -872,6 +927,11 @@ fn check_for_intersection_finds_partially_overlapped_lines() {
       EventRelation {
         sibling_id: 6,
         sibling_point: Vec2::new(2.0, 2.0),
+        prev_in_result: Some(420),
+        // The operation is intersection, so two edges means the "primary" edge
+        // is in the result.
+        in_result: true,
+        edge_coincidence_type: EdgeCoincidenceType::SameTransition,
         ..Default::default()
       },
       EventRelation {
@@ -887,6 +947,8 @@ fn check_for_intersection_finds_partially_overlapped_lines() {
       EventRelation {
         sibling_id: 1,
         sibling_point: Vec2::new(2.0, 2.0),
+        prev_in_result: Some(420),
+        edge_coincidence_type: EdgeCoincidenceType::DuplicateCoincidence,
         ..Default::default()
       },
       EventRelation {
@@ -921,6 +983,7 @@ fn check_for_intersection_finds_partially_overlapped_lines() {
     },
     &mut event_queue,
     &mut event_relations,
+    Operation::Difference,
   );
 
   let event_queue = event_queue_to_vec(event_queue);
@@ -963,6 +1026,7 @@ fn check_for_intersection_finds_partially_overlapped_lines() {
       EventRelation {
         sibling_id: 6,
         sibling_point: Vec2::new(1.0, 1.0),
+        prev_in_result: Some(1337),
         ..Default::default()
       },
       EventRelation {
@@ -973,6 +1037,13 @@ fn check_for_intersection_finds_partially_overlapped_lines() {
       EventRelation {
         sibling_id: 4,
         sibling_point: Vec2::new(2.0, 2.0),
+        // `prev_in_result` was copied from event 0.
+        prev_in_result: Some(1337),
+        // Event 0 is not in the result, so this event is chosen as the
+        // "primary" coincident event.
+        edge_coincidence_type: EdgeCoincidenceType::SameTransition,
+        // Cleared because the operation is difference.
+        in_result: false,
         ..Default::default()
       },
       EventRelation {
@@ -998,6 +1069,7 @@ fn check_for_intersection_finds_partially_overlapped_lines() {
       EventRelation {
         sibling_id: 1,
         sibling_point: Vec2::new(2.0, 2.0),
+        edge_coincidence_type: EdgeCoincidenceType::DuplicateCoincidence,
         ..Default::default()
       },
     ]

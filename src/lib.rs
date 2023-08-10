@@ -170,6 +170,9 @@ impl Event {
   // Determine whether `self` and `relation` imply the edge is in the result
   // based on the operation.
   fn in_result(&self, relation: &EventRelation, operation: Operation) -> bool {
+    if relation.edge_coincidence_type != EdgeCoincidenceType::NoCoincidence {
+      return relation.edge_coincidence_type.in_result(operation);
+    }
     match operation {
       // The edge is in the result iff it is inside the other polygon, aka if
       // the closest edge below is an out-in transition.
@@ -254,6 +257,40 @@ struct EventRelation {
   in_result: bool,
   // The ID of the previous event in the sweep line that was in the result.
   prev_in_result: Option<usize>,
+  // The type of coincidence between another edge.
+  edge_coincidence_type: EdgeCoincidenceType,
+}
+
+// The type of edge coincidence (overlapping edges).
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+enum EdgeCoincidenceType {
+  // A standard edge before any coincident edge has been detected.
+  #[default]
+  NoCoincidence,
+  // There is a coincident edge and it has the same in-out transition as this
+  // edge.
+  SameTransition,
+  // There is a coincient edge and it has a different in-out transition as
+  // this edge.
+  DifferentTransition,
+  // There is a coincident edge, but we only need one of these edges in the
+  // result - this edge will not be in the result.
+  DuplicateCoincidence,
+}
+
+impl EdgeCoincidenceType {
+  fn in_result(&self, operation: Operation) -> bool {
+    match self {
+      EdgeCoincidenceType::NoCoincidence => panic!(),
+      EdgeCoincidenceType::DuplicateCoincidence => false,
+      EdgeCoincidenceType::SameTransition => {
+        operation == Operation::Intersection || operation == Operation::Union
+      }
+      EdgeCoincidenceType::DifferentTransition => {
+        operation == Operation::Difference
+      }
+    }
+  }
 }
 
 // Creates a left and right event for each edge in the polygon.
@@ -389,6 +426,7 @@ fn check_for_intersection(
   existing_event: &Event,
   event_queue: &mut BinaryHeap<Reverse<Event>>,
   event_relations: &mut Vec<EventRelation>,
+  operation: Operation,
 ) {
   match edge_intersection(
     (new_event.point, event_relations[new_event.event_id].sibling_point),
@@ -412,43 +450,87 @@ fn check_for_intersection(
       }
     }
     EdgeIntersectionResult::LineIntersection(start, end) => {
+      let new_event_coincident_event_id;
       match (
         start == new_event.point,
         end == event_relations[new_event.event_id].sibling_point,
       ) {
         (true, true) => {
           // The edge is fully covered, so no new splits are necessary.
+          new_event_coincident_event_id = new_event.event_id;
         }
         (false, false) => {
           split_edge(new_event, end, event_queue, event_relations);
-          split_edge(new_event, start, event_queue, event_relations);
+          new_event_coincident_event_id =
+            split_edge(new_event, start, event_queue, event_relations);
         }
         (true, false) => {
           split_edge(new_event, end, event_queue, event_relations);
+          new_event_coincident_event_id = new_event.event_id;
         }
         (false, true) => {
-          split_edge(new_event, start, event_queue, event_relations);
+          new_event_coincident_event_id =
+            split_edge(new_event, start, event_queue, event_relations);
         }
       }
 
+      let existing_event_coincident_event_id;
       match (
         start == existing_event.point,
         end == event_relations[existing_event.event_id].sibling_point,
       ) {
         (true, true) => {
           // The edge is fully covered, so no new splits are necessary.
+          existing_event_coincident_event_id = existing_event.event_id;
         }
         (false, false) => {
           split_edge(existing_event, end, event_queue, event_relations);
-          split_edge(existing_event, start, event_queue, event_relations);
+          existing_event_coincident_event_id =
+            split_edge(existing_event, start, event_queue, event_relations);
         }
         (true, false) => {
           split_edge(existing_event, end, event_queue, event_relations);
+          existing_event_coincident_event_id = existing_event.event_id;
         }
         (false, true) => {
-          split_edge(existing_event, start, event_queue, event_relations);
+          existing_event_coincident_event_id =
+            split_edge(existing_event, start, event_queue, event_relations);
         }
       }
+
+      let same_transition = event_relations[new_event.event_id].in_out
+        == event_relations[existing_event.event_id].in_out;
+
+      // The prev_in_result of the new edge can sometimes equal the pre-existing
+      // edge. Since the edges are intersecting, their prev_in_result
+      // should match (since neither is "more important").
+      event_relations[new_event_coincident_event_id].prev_in_result =
+        event_relations[existing_event.event_id].prev_in_result;
+
+      // We say the "primary" coincident edge is the one that will represent
+      // both edges. The "duplicate" coincident edge will not contribute to the
+      // final polygon.
+      let (primary_edge_event_id, duplicate_edge_event_id) =
+        if event_relations[existing_event_coincident_event_id].in_result {
+          (existing_event_coincident_event_id, new_event_coincident_event_id)
+        } else {
+          (new_event_coincident_event_id, existing_event_coincident_event_id)
+        };
+
+      let primary_edge_relation = &mut event_relations[primary_edge_event_id];
+      primary_edge_relation.edge_coincidence_type = if same_transition {
+        EdgeCoincidenceType::SameTransition
+      } else {
+        EdgeCoincidenceType::DifferentTransition
+      };
+      primary_edge_relation.in_result =
+        primary_edge_relation.edge_coincidence_type.in_result(operation);
+
+      let duplicate_edge_relation =
+        &mut event_relations[duplicate_edge_event_id];
+      duplicate_edge_relation.edge_coincidence_type =
+        EdgeCoincidenceType::DuplicateCoincidence;
+      duplicate_edge_relation.in_result = false;
     }
   }
 }
@@ -607,6 +689,7 @@ fn subdivide_edges(
           prev_event,
           &mut event_queue,
           event_relations,
+          operation,
         );
       }
       if pos + 1 < sweep_line.len() {
@@ -618,6 +701,7 @@ fn subdivide_edges(
           next_event,
           &mut event_queue,
           event_relations,
+          operation,
         );
       }
     } else {
@@ -637,6 +721,7 @@ fn subdivide_edges(
           next_event,
           &mut event_queue,
           event_relations,
+          operation,
         );
       }
     }
@@ -645,6 +730,16 @@ fn subdivide_edges(
       result.push(event);
     }
   }
+
+  // Only keep events that are still in the result by the end. With no
+  // coincident edges, in_result can never change after the first pass. However,
+  // with coincident edges, an edge that previously thought it was in the result
+  // may no longer be in the result. Consider the subject and the clip being the
+  // same, and the operation being difference or XOR. The first subject edge
+  // will have no previous event in the sweep line, so it will think it is in
+  // the result. Then the clip edge will be processed and now the edge is no
+  // longer in the result.
+  result.retain(|event| event_relations[event.event_id].in_result);
 
   result
 }

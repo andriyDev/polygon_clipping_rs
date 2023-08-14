@@ -5,8 +5,8 @@ use rand::seq::SliceRandom;
 
 use crate::{
   check_for_intersection, create_events_for_polygon, difference, intersection,
-  split_edge, union, xor, EdgeCoincidenceType, Event, EventRelation, Operation,
-  Polygon,
+  split_edge, union, xor, BooleanResult, EdgeCoincidenceType, Event,
+  EventRelation, Operation, Polygon, SourceEdge,
 };
 
 #[test]
@@ -16,59 +16,59 @@ fn split_edge_events_ordered_correctly() {
     Event {
       event_id: 100,
       point: Vec2::new(3.0, 2.0),
-      is_subject: false,
       left: true,
+      is_subject: false,
       other_point: Vec2::new(5.0, 2.0),
     },
     Event {
       event_id: 90,
       point: Vec2::new(3.5, 1.0),
-      is_subject: true,
       left: true,
+      is_subject: true,
       other_point: Vec2::new(5.0, 3.0),
     },
     // Edge intersection events.
     Event {
       event_id: 95,
       point: Vec2::new(4.25, 2.0),
-      is_subject: true,
       left: false,
+      is_subject: true,
       other_point: Vec2::new(3.5, 1.0),
     },
     Event {
       event_id: 93,
       point: Vec2::new(4.25, 2.0),
-      is_subject: false,
       left: false,
+      is_subject: false,
       other_point: Vec2::new(3.0, 2.0),
     },
     Event {
       event_id: 105,
       point: Vec2::new(4.25, 2.0),
-      is_subject: false,
       left: true,
+      is_subject: false,
       other_point: Vec2::new(5.0, 2.0),
     },
     Event {
       event_id: 101,
       point: Vec2::new(4.25, 2.0),
-      is_subject: true,
       left: true,
+      is_subject: true,
       other_point: Vec2::new(5.0, 3.0),
     },
     // Edge end events.
     Event {
       event_id: 97,
       point: Vec2::new(5.0, 2.0),
-      is_subject: false,
       left: false,
+      is_subject: false,
       other_point: Vec2::new(3.0, 2.0),
     },
     Event {
       event_id: 89,
       point: Vec2::new(5.0, 3.0),
-      is_subject: true,
       left: false,
+      is_subject: true,
       other_point: Vec2::new(3.5, 1.0),
     },
   ];
@@ -120,8 +120,6 @@ fn split_edge_events_ordered_correctly() {
   sorted_events.shuffle(&mut rand::thread_rng());
   sorted_events.sort();
 
-  dbg!(&sorted_events);
-  dbg!(&expected_events);
   assert_eq!(sorted_events, expected_events);
 }
 
@@ -290,81 +288,97 @@ fn creates_events_for_polygon() {
       EventRelation {
         sibling_id: 1,
         sibling_point: Vec2::new(3.0, 1.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 0,
         sibling_point: Vec2::new(1.0, 1.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 3,
         sibling_point: Vec2::new(3.0, 3.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 2,
         sibling_point: Vec2::new(3.0, 1.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 5,
         sibling_point: Vec2::new(1.0, 3.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 4,
         sibling_point: Vec2::new(3.0, 3.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 7,
         sibling_point: Vec2::new(1.0, 1.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 6,
         sibling_point: Vec2::new(1.0, 3.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 9,
         sibling_point: Vec2::new(5.0, 1.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 1, edge: 0 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 8,
         sibling_point: Vec2::new(4.0, 1.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 1, edge: 0 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 11,
         sibling_point: Vec2::new(6.0, 2.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 1, edge: 1 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 10,
         sibling_point: Vec2::new(5.0, 1.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 1, edge: 1 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 13,
         sibling_point: Vec2::new(5.0, 2.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 1, edge: 2 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 12,
         sibling_point: Vec2::new(6.0, 2.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 1, edge: 2 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 15,
         sibling_point: Vec2::new(4.0, 1.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 1, edge: 3 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 14,
         sibling_point: Vec2::new(5.0, 2.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 1, edge: 3 },
         ..Default::default()
       },
     ]
@@ -383,6 +397,7 @@ fn splits_edges() {
     EventRelation {
       sibling_id: 0,
       sibling_point: Vec2::new(0.0, 0.0),
+      source_edge: SourceEdge { is_from_subject: true, contour: 4, edge: 20 },
       ..Default::default()
     },
   ];
@@ -435,16 +450,19 @@ fn splits_edges() {
       EventRelation {
         sibling_id: 2,
         sibling_point: SPLIT_EDGE,
+        source_edge: SourceEdge { is_from_subject: true, contour: 4, edge: 20 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 1,
         sibling_point: Vec2::new(1.0, 1.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 4, edge: 20 },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 0,
         sibling_point: Vec2::new(0.0, 0.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 4, edge: 20 },
         ..Default::default()
       },
     ]
@@ -511,6 +529,7 @@ fn check_for_intersection_finds_point_intersection() {
     EventRelation {
       sibling_id: 1,
       sibling_point: Vec2::new(3.0, 3.0),
+      source_edge: SourceEdge { is_from_subject: false, contour: 4, edge: 20 },
       ..Default::default()
     },
     EventRelation {
@@ -521,6 +540,7 @@ fn check_for_intersection_finds_point_intersection() {
     EventRelation {
       sibling_id: 3,
       sibling_point: Vec2::new(3.0, 4.0),
+      source_edge: SourceEdge { is_from_subject: true, contour: 13, edge: 37 },
       ..Default::default()
     },
     EventRelation {
@@ -590,6 +610,11 @@ fn check_for_intersection_finds_point_intersection() {
       EventRelation {
         sibling_id: 4,
         sibling_point: Vec2::new(2.0, 2.5),
+        source_edge: SourceEdge {
+          is_from_subject: false,
+          contour: 4,
+          edge: 20
+        },
         ..Default::default()
       },
       EventRelation {
@@ -600,6 +625,11 @@ fn check_for_intersection_finds_point_intersection() {
       EventRelation {
         sibling_id: 6,
         sibling_point: Vec2::new(2.0, 2.5),
+        source_edge: SourceEdge {
+          is_from_subject: true,
+          contour: 13,
+          edge: 37
+        },
         ..Default::default()
       },
       EventRelation {
@@ -610,21 +640,41 @@ fn check_for_intersection_finds_point_intersection() {
       EventRelation {
         sibling_id: 0,
         sibling_point: Vec2::new(1.0, 2.0),
+        source_edge: SourceEdge {
+          is_from_subject: false,
+          contour: 4,
+          edge: 20
+        },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 1,
         sibling_point: Vec2::new(3.0, 3.0),
+        source_edge: SourceEdge {
+          is_from_subject: false,
+          contour: 4,
+          edge: 20
+        },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 2,
         sibling_point: Vec2::new(1.0, 1.0),
+        source_edge: SourceEdge {
+          is_from_subject: true,
+          contour: 13,
+          edge: 37
+        },
         ..Default::default()
       },
       EventRelation {
         sibling_id: 3,
         sibling_point: Vec2::new(3.0, 4.0),
+        source_edge: SourceEdge {
+          is_from_subject: true,
+          contour: 13,
+          edge: 37
+        },
         ..Default::default()
       },
     ]
@@ -1097,67 +1147,117 @@ fn boolean_of_rhombuses() {
 
   assert_eq!(
     union(&subject, &clip),
-    Polygon {
-      contours: vec![vec![
-        Vec2::new(1.0, 1.0),
-        Vec2::new(3.5, 1.0),
-        Vec2::new(4.25, 2.0),
-        Vec2::new(5.0, 2.0),
-        Vec2::new(7.0, 4.0),
-        Vec2::new(5.0, 4.0),
-        Vec2::new(4.0, 3.0),
-        Vec2::new(3.0, 3.0),
-      ]]
+    BooleanResult {
+      polygon: Polygon {
+        contours: vec![vec![
+          Vec2::new(1.0, 1.0),
+          Vec2::new(3.5, 1.0),
+          Vec2::new(4.25, 2.0),
+          Vec2::new(5.0, 2.0),
+          Vec2::new(7.0, 4.0),
+          Vec2::new(5.0, 4.0),
+          Vec2::new(4.0, 3.0),
+          Vec2::new(3.0, 3.0),
+        ]]
+      },
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      ]],
     }
   );
 
   assert_eq!(
     intersection(&subject, &clip),
-    Polygon {
-      contours: vec![vec![
-        Vec2::new(3.0, 2.0),
-        Vec2::new(4.25, 2.0),
-        Vec2::new(5.0, 3.0),
-        Vec2::new(4.0, 3.0),
-      ]]
+    BooleanResult {
+      polygon: Polygon {
+        contours: vec![vec![
+          Vec2::new(3.0, 2.0),
+          Vec2::new(4.25, 2.0),
+          Vec2::new(5.0, 3.0),
+          Vec2::new(4.0, 3.0),
+        ]]
+      },
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
+      ]],
     }
   );
 
   assert_eq!(
     difference(&subject, &clip),
-    Polygon {
-      contours: vec![vec![
-        Vec2::new(1.0, 1.0),
-        Vec2::new(3.5, 1.0),
-        Vec2::new(4.25, 2.0),
-        Vec2::new(3.0, 2.0),
-        Vec2::new(4.0, 3.0),
-        Vec2::new(3.0, 3.0),
-      ]]
-    }
-  );
-
-  assert_eq!(
-    xor(&subject, &clip),
-    Polygon {
-      contours: vec![
-        vec![
+    BooleanResult {
+      polygon: Polygon {
+        contours: vec![vec![
           Vec2::new(1.0, 1.0),
           Vec2::new(3.5, 1.0),
           Vec2::new(4.25, 2.0),
           Vec2::new(3.0, 2.0),
           Vec2::new(4.0, 3.0),
           Vec2::new(3.0, 3.0),
+        ]]
+      },
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      ]],
+    }
+  );
+
+  assert_eq!(
+    xor(&subject, &clip),
+    BooleanResult {
+      polygon: Polygon {
+        contours: vec![
+          vec![
+            Vec2::new(1.0, 1.0),
+            Vec2::new(3.5, 1.0),
+            Vec2::new(4.25, 2.0),
+            Vec2::new(3.0, 2.0),
+            Vec2::new(4.0, 3.0),
+            Vec2::new(3.0, 3.0),
+          ],
+          vec![
+            Vec2::new(4.0, 3.0),
+            Vec2::new(5.0, 3.0),
+            Vec2::new(4.25, 2.0),
+            Vec2::new(5.0, 2.0),
+            Vec2::new(7.0, 4.0),
+            Vec2::new(5.0, 4.0),
+          ]
+        ]
+      },
+      contour_source_edges: vec![
+        vec![
+          SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+          SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+          SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
         ],
         vec![
-          Vec2::new(4.0, 3.0),
-          Vec2::new(5.0, 3.0),
-          Vec2::new(4.25, 2.0),
-          Vec2::new(5.0, 2.0),
-          Vec2::new(7.0, 4.0),
-          Vec2::new(5.0, 4.0),
+          SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+          SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+          SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+          SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+          SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
         ]
-      ]
+      ],
     }
   );
 }
@@ -1183,67 +1283,117 @@ fn boolean_of_squares() {
 
   assert_eq!(
     union(&subject, &clip),
-    Polygon {
-      contours: vec![vec![
-        Vec2::new(1.0, 1.0),
-        Vec2::new(3.0, 1.0),
-        Vec2::new(3.0, 2.0),
-        Vec2::new(4.0, 2.0),
-        Vec2::new(4.0, 4.0),
-        Vec2::new(2.0, 4.0),
-        Vec2::new(2.0, 3.0),
-        Vec2::new(1.0, 3.0),
-      ]]
+    BooleanResult {
+      polygon: Polygon {
+        contours: vec![vec![
+          Vec2::new(1.0, 1.0),
+          Vec2::new(3.0, 1.0),
+          Vec2::new(3.0, 2.0),
+          Vec2::new(4.0, 2.0),
+          Vec2::new(4.0, 4.0),
+          Vec2::new(2.0, 4.0),
+          Vec2::new(2.0, 3.0),
+          Vec2::new(1.0, 3.0),
+        ]]
+      },
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      ]],
     }
   );
 
   assert_eq!(
     intersection(&subject, &clip),
-    Polygon {
-      contours: vec![vec![
-        Vec2::new(2.0, 2.0),
-        Vec2::new(3.0, 2.0),
-        Vec2::new(3.0, 3.0),
-        Vec2::new(2.0, 3.0),
-      ]]
+    BooleanResult {
+      polygon: Polygon {
+        contours: vec![vec![
+          Vec2::new(2.0, 2.0),
+          Vec2::new(3.0, 2.0),
+          Vec2::new(3.0, 3.0),
+          Vec2::new(2.0, 3.0),
+        ]]
+      },
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
+      ]],
     }
   );
 
   assert_eq!(
     difference(&subject, &clip),
-    Polygon {
-      contours: vec![vec![
-        Vec2::new(1.0, 1.0),
-        Vec2::new(3.0, 1.0),
-        Vec2::new(3.0, 2.0),
-        Vec2::new(2.0, 2.0),
-        Vec2::new(2.0, 3.0),
-        Vec2::new(1.0, 3.0),
-      ]]
-    }
-  );
-
-  assert_eq!(
-    xor(&subject, &clip),
-    Polygon {
-      contours: vec![
-        vec![
+    BooleanResult {
+      polygon: Polygon {
+        contours: vec![vec![
           Vec2::new(1.0, 1.0),
           Vec2::new(3.0, 1.0),
           Vec2::new(3.0, 2.0),
           Vec2::new(2.0, 2.0),
           Vec2::new(2.0, 3.0),
           Vec2::new(1.0, 3.0),
+        ]]
+      },
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      ]],
+    }
+  );
+
+  assert_eq!(
+    xor(&subject, &clip),
+    BooleanResult {
+      polygon: Polygon {
+        contours: vec![
+          vec![
+            Vec2::new(1.0, 1.0),
+            Vec2::new(3.0, 1.0),
+            Vec2::new(3.0, 2.0),
+            Vec2::new(2.0, 2.0),
+            Vec2::new(2.0, 3.0),
+            Vec2::new(1.0, 3.0),
+          ],
+          vec![
+            Vec2::new(2.0, 3.0),
+            Vec2::new(3.0, 3.0),
+            Vec2::new(3.0, 2.0),
+            Vec2::new(4.0, 2.0),
+            Vec2::new(4.0, 4.0),
+            Vec2::new(2.0, 4.0),
+          ]
+        ]
+      },
+      contour_source_edges: vec![
+        vec![
+          SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+          SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+          SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
         ],
         vec![
-          Vec2::new(2.0, 3.0),
-          Vec2::new(3.0, 3.0),
-          Vec2::new(3.0, 2.0),
-          Vec2::new(4.0, 2.0),
-          Vec2::new(4.0, 4.0),
-          Vec2::new(2.0, 4.0),
+          SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+          SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+          SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+          SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+          SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
         ]
-      ]
+      ],
     }
   );
 }
@@ -1268,7 +1418,18 @@ fn add_and_remove_squares() {
   };
 
   // All boolean operations between the clip and the subject.
-  assert_eq!(intersection(&subject, &clip), clip);
+  assert_eq!(
+    intersection(&subject, &clip),
+    BooleanResult {
+      polygon: clip.clone(),
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      ]],
+    }
+  );
   let expected_union = Polygon {
     contours: vec![vec![
       Vec2::new(1.0, 1.0),
@@ -1279,16 +1440,39 @@ fn add_and_remove_squares() {
       Vec2::new(1.0, 2.0),
     ]],
   };
-  assert_eq!(union(&subject, &clip), expected_union);
+  assert_eq!(
+    union(&subject, &clip),
+    BooleanResult {
+      polygon: expected_union.clone(),
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      ]],
+    }
+  );
 
-  let expected_difference = Polygon {
-    contours: vec![vec![
-      Vec2::new(1.0, 2.0),
-      Vec2::new(2.0, 2.0),
-      Vec2::new(2.0, 1.0),
-      Vec2::new(3.0, 1.0),
-      Vec2::new(3.0, 3.0),
-      Vec2::new(1.0, 3.0),
+  let expected_difference = BooleanResult {
+    polygon: Polygon {
+      contours: vec![vec![
+        Vec2::new(1.0, 2.0),
+        Vec2::new(2.0, 2.0),
+        Vec2::new(2.0, 1.0),
+        Vec2::new(3.0, 1.0),
+        Vec2::new(3.0, 3.0),
+        Vec2::new(1.0, 3.0),
+      ]],
+    },
+    contour_source_edges: vec![vec![
+      SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+      SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
     ]],
   };
   assert_eq!(difference(&subject, &clip), expected_difference);
@@ -1296,9 +1480,27 @@ fn add_and_remove_squares() {
   let xor_result = xor(&subject, &clip);
   assert_eq!(xor_result, expected_difference);
 
-  dbg!(&xor_result);
-  assert_eq!(intersection(&xor_result, &clip), Polygon { contours: vec![] });
-  assert_eq!(union(&xor_result, &clip), expected_union);
+  assert_eq!(
+    intersection(&xor_result.polygon, &clip),
+    BooleanResult {
+      polygon: Polygon { contours: vec![] },
+      contour_source_edges: vec![]
+    }
+  );
+  assert_eq!(
+    union(&xor_result.polygon, &clip),
+    BooleanResult {
+      polygon: expected_union,
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 4 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 5 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
+      ]],
+    }
+  );
 }
 
 #[test]
@@ -1337,14 +1539,75 @@ fn cut_and_fill_hole() {
     ],
   };
 
-  assert_eq!(difference(&subject, &clip), expected_subject_with_hole);
-  assert_eq!(xor(&subject, &clip), expected_subject_with_hole);
+  let expected_difference = BooleanResult {
+    polygon: expected_subject_with_hole.clone(),
+    contour_source_edges: vec![
+      vec![
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      ],
+      vec![
+        SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+      ],
+    ],
+  };
+  assert_eq!(difference(&subject, &clip), expected_difference);
+  assert_eq!(xor(&subject, &clip), expected_difference);
 
-  assert_eq!(union(&expected_subject_with_hole, &clip), subject);
-  assert_eq!(xor(&expected_subject_with_hole, &clip), subject);
+  assert_eq!(
+    union(&expected_subject_with_hole, &clip),
+    BooleanResult {
+      polygon: subject.clone(),
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      ]]
+    }
+  );
+  assert_eq!(
+    xor(&expected_subject_with_hole, &clip),
+    BooleanResult {
+      polygon: subject.clone(),
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      ]]
+    }
+  );
 
-  assert_eq!(union(&expected_subject_with_hole, &subject), subject);
-  assert_eq!(xor(&expected_subject_with_hole, &subject), clip);
+  assert_eq!(
+    union(&expected_subject_with_hole, &subject),
+    BooleanResult {
+      polygon: subject.clone(),
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      ]]
+    }
+  );
+  assert_eq!(
+    xor(&expected_subject_with_hole, &subject),
+    BooleanResult {
+      polygon: clip,
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: true, contour: 1, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 1, edge: 1 },
+        SourceEdge { is_from_subject: true, contour: 1, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 1, edge: 3 },
+      ]]
+    }
+  );
 }
 
 #[test]
@@ -1406,30 +1669,138 @@ fn partially_overlapping_edges_are_split() {
     ]],
   };
 
-  assert_eq!(intersection(&subject, &clip), subdivided_clip);
-  assert_eq!(intersection(&clip, &subject), subdivided_clip);
-  assert_eq!(union(&subject, &clip), subdivided_subject);
-  assert_eq!(union(&clip, &subject), subdivided_subject);
   assert_eq!(
-    difference(&subject, &clip),
-    Polygon {
-      contours: vec![
-        vec![Vec2::new(1.0, 1.0), Vec2::new(2.0, 1.0), Vec2::new(1.0, 2.0)],
-        vec![
-          Vec2::new(1.0, 3.0),
-          Vec2::new(2.0, 4.0),
-          Vec2::new(1.1, 4.0),
-          Vec2::new(1.0, 4.0),
-        ],
-        vec![Vec2::new(3.0, 1.0), Vec2::new(4.0, 1.0), Vec2::new(4.0, 2.0)],
-        vec![
-          Vec2::new(3.0, 4.0),
-          Vec2::new(4.0, 3.0),
-          Vec2::new(4.0, 4.0),
-          Vec2::new(3.9, 4.0),
-        ],
-      ]
+    intersection(&subject, &clip),
+    BooleanResult {
+      polygon: subdivided_clip.clone(),
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: false, contour: 0, edge: 7 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 4 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 5 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 6 },
+      ]],
     }
   );
-  assert_eq!(difference(&clip, &subject), Polygon { contours: vec![] });
+  assert_eq!(
+    intersection(&clip, &subject),
+    BooleanResult {
+      polygon: subdivided_clip,
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: true, contour: 0, edge: 7 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 4 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 5 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 6 },
+      ]],
+    }
+  );
+  assert_eq!(
+    union(&subject, &clip),
+    BooleanResult {
+      polygon: subdivided_subject.clone(),
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 4 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 4 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 4 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 5 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 6 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 6 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 6 },
+      ]],
+    }
+  );
+  assert_eq!(
+    union(&clip, &subject),
+    BooleanResult {
+      polygon: subdivided_subject,
+      contour_source_edges: vec![vec![
+        SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 4 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 4 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 4 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 5 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 6 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 6 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 6 },
+      ]],
+    }
+  );
+  assert_eq!(
+    difference(&subject, &clip),
+    BooleanResult {
+      polygon: Polygon {
+        contours: vec![
+          vec![Vec2::new(1.0, 1.0), Vec2::new(2.0, 1.0), Vec2::new(1.0, 2.0)],
+          vec![
+            Vec2::new(1.0, 3.0),
+            Vec2::new(2.0, 4.0),
+            Vec2::new(1.1, 4.0),
+            Vec2::new(1.0, 4.0),
+          ],
+          vec![Vec2::new(3.0, 1.0), Vec2::new(4.0, 1.0), Vec2::new(4.0, 2.0)],
+          vec![
+            Vec2::new(3.0, 4.0),
+            Vec2::new(4.0, 3.0),
+            Vec2::new(4.0, 4.0),
+            Vec2::new(3.9, 4.0),
+          ],
+        ]
+      },
+      contour_source_edges: vec![
+        vec![
+          SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+          SourceEdge { is_from_subject: false, contour: 0, edge: 7 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 6 },
+        ],
+        vec![
+          SourceEdge { is_from_subject: false, contour: 0, edge: 5 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 4 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 5 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 6 },
+        ],
+        vec![
+          SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+          SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+        ],
+        vec![
+          SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 4 },
+        ]
+      ],
+    }
+  );
+  assert_eq!(
+    difference(&clip, &subject),
+    BooleanResult {
+      polygon: Polygon { contours: vec![] },
+      contour_source_edges: vec![],
+    }
+  );
 }

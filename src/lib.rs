@@ -13,19 +13,42 @@ pub struct Polygon {
   pub contours: Vec<Vec<Vec2>>,
 }
 
-pub fn intersection(subject: &Polygon, clip: &Polygon) -> Polygon {
+// The source of an edge.
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+pub struct SourceEdge {
+  // Whether the edge is from the subject polygon (otherwise, the clip
+  // polygon).
+  pub is_from_subject: bool,
+  // The index of the contour in the source polygon.
+  pub contour: usize,
+  // The edge in the contour of the source polygon.
+  pub edge: usize,
+}
+
+// The result of performing a boolean operation.
+#[derive(Clone, PartialEq, Debug)]
+pub struct BooleanResult {
+  // The resulting polygon.
+  pub polygon: Polygon,
+  // The source of each edge in `polygon`. `source_edge` will have one entry
+  // per contour in `polygon` and each entry will have the same number of edges
+  // as that contour in `polygon`.
+  pub contour_source_edges: Vec<Vec<SourceEdge>>,
+}
+
+pub fn intersection(subject: &Polygon, clip: &Polygon) -> BooleanResult {
   perform_boolean(subject, clip, Operation::Intersection)
 }
 
-pub fn union(subject: &Polygon, clip: &Polygon) -> Polygon {
+pub fn union(subject: &Polygon, clip: &Polygon) -> BooleanResult {
   perform_boolean(subject, clip, Operation::Union)
 }
 
-pub fn difference(subject: &Polygon, clip: &Polygon) -> Polygon {
+pub fn difference(subject: &Polygon, clip: &Polygon) -> BooleanResult {
   perform_boolean(subject, clip, Operation::Difference)
 }
 
-pub fn xor(subject: &Polygon, clip: &Polygon) -> Polygon {
+pub fn xor(subject: &Polygon, clip: &Polygon) -> BooleanResult {
   perform_boolean(subject, clip, Operation::XOR)
 }
 
@@ -41,7 +64,7 @@ fn perform_boolean(
   subject: &Polygon,
   clip: &Polygon,
   operation: Operation,
-) -> Polygon {
+) -> BooleanResult {
   let mut event_queue = BinaryHeap::new();
   let mut event_relations = Vec::new();
 
@@ -259,6 +282,9 @@ struct EventRelation {
   prev_in_result: Option<usize>,
   // The type of coincidence between another edge.
   edge_coincidence_type: EdgeCoincidenceType,
+  // The edge that this event comes from. This can change for coincident edges
+  // to prefer to report the subject edge.
+  source_edge: SourceEdge,
 }
 
 // The type of edge coincidence (overlapping edges).
@@ -300,7 +326,7 @@ fn create_events_for_polygon(
   event_queue: &mut BinaryHeap<Reverse<Event>>,
   event_relations: &mut Vec<EventRelation>,
 ) {
-  for contour in polygon.contours.iter() {
+  for (contour_index, contour) in polygon.contours.iter().enumerate() {
     for point_index in 0..contour.len() {
       let next_point_index =
         if point_index == contour.len() - 1 { 0 } else { point_index + 1 };
@@ -335,11 +361,21 @@ fn create_events_for_polygon(
       event_relations.push(EventRelation {
         sibling_id: event_id_2,
         sibling_point: point_2,
+        source_edge: SourceEdge {
+          is_from_subject: is_subject,
+          contour: contour_index,
+          edge: point_index,
+        },
         ..Default::default()
       });
       event_relations.push(EventRelation {
         sibling_id: event_id_1,
         sibling_point: point_1,
+        source_edge: SourceEdge {
+          is_from_subject: is_subject,
+          contour: contour_index,
+          edge: point_index,
+        },
         ..Default::default()
       });
     }
@@ -516,6 +552,31 @@ fn check_for_intersection(
         } else {
           (new_event_coincident_event_id, existing_event_coincident_event_id)
         };
+      // In the final result, we want to prefer subject edges over clip edges,
+      // so change the primary edge (which is the only one possibly in the
+      // result) to use the subject edge if one of them is a clip edge.
+      match (
+        event_relations[new_event.event_id].source_edge.is_from_subject,
+        event_relations[existing_event.event_id].source_edge.is_from_subject,
+      ) {
+        // Neither edge is "preferred", so just go with the defaults.
+        (true, true) => {}
+        (false, false) => {}
+        // The subject edge should be preferred, so assign those.
+        (true, false) => {
+          let source_edge = event_relations[new_event.event_id].source_edge;
+          event_relations[primary_edge_event_id].source_edge = source_edge;
+          let sibling_id = event_relations[primary_edge_event_id].sibling_id;
+          event_relations[sibling_id].source_edge = source_edge;
+        }
+        (false, true) => {
+          let source_edge =
+            event_relations[existing_event.event_id].source_edge;
+          event_relations[primary_edge_event_id].source_edge = source_edge;
+          let sibling_id = event_relations[primary_edge_event_id].sibling_id;
+          event_relations[sibling_id].source_edge = source_edge;
+        }
+      }
 
       let primary_edge_relation = &mut event_relations[primary_edge_event_id];
       primary_edge_relation.edge_coincidence_type = if same_transition {
@@ -544,9 +605,9 @@ fn split_edge(
   event_queue: &mut BinaryHeap<Reverse<Event>>,
   event_relations: &mut Vec<EventRelation>,
 ) -> usize {
-  let (sibling_id, sibling_point) = {
+  let (sibling_id, sibling_point, source_edge) = {
     let relation = &event_relations[edge_event.event_id];
-    (relation.sibling_id, relation.sibling_point)
+    (relation.sibling_id, relation.sibling_point, relation.source_edge)
   };
 
   let split_1_id = event_relations.len();
@@ -570,11 +631,13 @@ fn split_edge(
   event_relations.push(EventRelation {
     sibling_id: edge_event.event_id,
     sibling_point: edge_event.point,
+    source_edge,
     ..Default::default()
   });
   event_relations.push(EventRelation {
     sibling_id,
     sibling_point,
+    source_edge,
     ..Default::default()
   });
 
@@ -823,9 +886,11 @@ fn compute_contour(
   event_relations: &[EventRelation],
   event_id_to_contour_flags: &mut HashMap<usize, EventContourFlags>,
   result_events: &[Event],
-) -> Vec<Vec2> {
+) -> (Vec<Vec2>, Vec<SourceEdge>) {
   let mut contour = Vec::new();
+  let mut contour_source_edges = Vec::new();
   contour.push(start_event.point);
+  contour_source_edges.push(event_relations[start_event.event_id].source_edge);
   let mut current_event = event_to_sibling_and_mark(
     start_event,
     contour_id,
@@ -837,7 +902,6 @@ fn compute_contour(
   );
 
   while current_event.point != start_event.point {
-    contour.push(current_event.point);
     let result_id =
       event_id_to_contour_flags[&current_event.event_id].result_id;
     if 0 < result_id
@@ -865,6 +929,9 @@ fn compute_contour(
         .unwrap()
         .processed = true;
     }
+    contour.push(current_event.point);
+    contour_source_edges
+      .push(event_relations[current_event.event_id].source_edge);
     current_event = event_to_sibling_and_mark(
       current_event,
       contour_id,
@@ -876,7 +943,7 @@ fn compute_contour(
     );
   }
 
-  contour
+  (contour, contour_source_edges)
 }
 
 // Finds the sibling of `event`, sets its flags to match the provided arguments,
@@ -905,7 +972,7 @@ fn join_contours(
   result_events: Vec<Event>,
   event_relations: Vec<EventRelation>,
   operation: Operation,
-) -> Polygon {
+) -> BooleanResult {
   let mut event_id_to_contour_flags = result_events
     .iter()
     .enumerate()
@@ -923,13 +990,14 @@ fn join_contours(
     .collect::<HashMap<_, _>>();
 
   let mut contours = Vec::new();
+  let mut contour_source_edges = Vec::new();
   for result_event in result_events.iter() {
     if event_id_to_contour_flags[&result_event.event_id].processed {
       continue;
     }
     let (depth, parent_contour_id) =
       compute_depth(result_event, &event_relations, &event_id_to_contour_flags);
-    let mut contour = compute_contour(
+    let (mut contour, mut source_edges_for_contour) = compute_contour(
       result_event,
       contours.len(),
       depth,
@@ -941,12 +1009,14 @@ fn join_contours(
 
     if depth % 2 == 1 {
       contour.reverse();
+      source_edges_for_contour.reverse();
     }
 
     contours.push(contour);
+    contour_source_edges.push(source_edges_for_contour);
   }
 
-  Polygon { contours }
+  BooleanResult { polygon: Polygon { contours }, contour_source_edges }
 }
 
 #[cfg(test)]

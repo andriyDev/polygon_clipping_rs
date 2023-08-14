@@ -13,6 +13,19 @@ pub struct Polygon {
   pub contours: Vec<Vec<Vec2>>,
 }
 
+impl Polygon {
+  // Computes the bounding box (min, max) of the polygon. Returns None if there
+  // are no vertices.
+  pub fn compute_bounds(&self) -> Option<(Vec2, Vec2)> {
+    self.contours.iter().flatten().fold(None, |bounds, &point| {
+      Some(match bounds {
+        None => (point, point),
+        Some((min, max)) => (min.min(point), max.max(point)),
+      })
+    })
+  }
+}
+
 // The source of an edge.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
 pub struct SourceEdge {
@@ -65,6 +78,98 @@ fn perform_boolean(
   clip: &Polygon,
   operation: Operation,
 ) -> BooleanResult {
+  // Turns `polygon` into the corresponding `BooleanResult`.
+  fn polygon_to_boolean_result(
+    polygon: &Polygon,
+    is_subject: bool,
+  ) -> BooleanResult {
+    BooleanResult {
+      polygon: polygon.clone(),
+      contour_source_edges: polygon
+        .contours
+        .iter()
+        .enumerate()
+        .map(|(contour_index, contour)| {
+          (0..contour.len())
+            .map(|index| SourceEdge {
+              is_from_subject: is_subject,
+              contour: contour_index,
+              edge: index,
+            })
+            .collect()
+        })
+        .collect(),
+    }
+  }
+
+  // This is just an optimization. If the bounding boxes of each polygon do not
+  // intersect, we can trivially compute the boolean operation. This does mean
+  // we won't "normalize" the polygons (e.g., removing empty contours), but that
+  // is a totally fine tradeoff for the speed.
+  let subject_bounds = subject.compute_bounds();
+  let clip_bounds = clip.compute_bounds();
+  match (subject_bounds, clip_bounds) {
+    (None, None) => {
+      return BooleanResult {
+        polygon: Polygon { contours: vec![] },
+        contour_source_edges: vec![],
+      }
+    }
+    (Some(_), None) => {
+      return if operation == Operation::Intersection {
+        BooleanResult {
+          polygon: Polygon { contours: vec![] },
+          contour_source_edges: vec![],
+        }
+      } else {
+        polygon_to_boolean_result(subject, /* is_subject= */ true)
+      };
+    }
+    (None, Some(_)) => {
+      return if operation == Operation::Intersection
+        || operation == Operation::Difference
+      {
+        BooleanResult {
+          polygon: Polygon { contours: vec![] },
+          contour_source_edges: vec![],
+        }
+      } else {
+        polygon_to_boolean_result(clip, /* is_subject= */ false)
+      };
+    }
+    (Some((subject_min, subject_max)), Some((clip_min, clip_max))) => {
+      if subject_max.x < clip_min.x
+        || subject_max.y < clip_min.y
+        || clip_max.x < subject_min.x
+        || clip_max.y < subject_min.y
+      {
+        return match operation {
+          Operation::Intersection => BooleanResult {
+            polygon: Polygon { contours: vec![] },
+            contour_source_edges: vec![],
+          },
+          Operation::Difference => {
+            polygon_to_boolean_result(subject, /* is_subject= */ true)
+          }
+          Operation::Union | Operation::XOR => {
+            let mut subject_result =
+              polygon_to_boolean_result(subject, /* is_subject= */ true);
+            let mut clip_result =
+              polygon_to_boolean_result(clip, /* is_subject= */ false);
+            subject_result
+              .polygon
+              .contours
+              .append(&mut clip_result.polygon.contours);
+            subject_result
+              .contour_source_edges
+              .append(&mut clip_result.contour_source_edges);
+            subject_result
+          }
+        };
+      }
+    }
+  }
+
   let mut event_queue = BinaryHeap::new();
   let mut event_relations = Vec::new();
 
@@ -319,7 +424,8 @@ impl EdgeCoincidenceType {
   }
 }
 
-// Creates a left and right event for each edge in the polygon.
+// Creates a left and right event for each edge in the polygon. Returns the
+// bounds of the polygon for convenience.
 fn create_events_for_polygon(
   polygon: &Polygon,
   is_subject: bool,

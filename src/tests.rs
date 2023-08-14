@@ -138,6 +138,29 @@ fn event_queue_to_vec(event_queue: BinaryHeap<Reverse<Event>>) -> Vec<Event> {
 }
 
 #[test]
+fn no_bounds_for_empty_polygon() {
+  assert_eq!(
+    Polygon { contours: vec![vec![], vec![], vec![]] }.compute_bounds(),
+    None
+  );
+}
+
+#[test]
+fn computes_bounds_for_non_empty_polygon() {
+  assert_eq!(
+    Polygon {
+      contours: vec![
+        vec![Vec2::new(1.0, 1.0), Vec2::new(5.0, 2.0)],
+        vec![],
+        vec![Vec2::new(2.0, 5.0), Vec2::new(3.0, 3.0)]
+      ]
+    }
+    .compute_bounds(),
+    Some((Vec2::new(1.0, 1.0), Vec2::new(5.0, 5.0)))
+  );
+}
+
+#[test]
 fn creates_events_for_polygon() {
   let polygon = Polygon {
     contours: vec![
@@ -1803,4 +1826,228 @@ fn partially_overlapping_edges_are_split() {
       contour_source_edges: vec![],
     }
   );
+}
+
+#[test]
+fn trivially_computes_operations_for_disjoint_bounding_boxes() {
+  let subject = Polygon {
+    contours: vec![
+      vec![
+        Vec2::new(1.0, 1.0),
+        Vec2::new(2.0, 1.0),
+        Vec2::new(2.0, 2.0),
+        Vec2::new(1.0, 2.0),
+      ],
+      // Empty contour to check that the original polygon is used "verbatim".
+      vec![],
+      vec![
+        Vec2::new(2.5, 2.5),
+        Vec2::new(3.5, 2.5),
+        Vec2::new(3.5, 3.5),
+        Vec2::new(2.5, 3.5),
+      ],
+    ],
+  };
+
+  let clip = Polygon {
+    contours: vec![vec![
+      Vec2::new(-2.0, 1.0),
+      Vec2::new(-1.0, 1.0),
+      Vec2::new(-1.0, 2.0),
+      Vec2::new(-2.0, 2.0),
+    ]],
+  };
+
+  let expected_union = BooleanResult {
+    polygon: Polygon {
+      contours: vec![
+        // Subject contours.
+        vec![
+          Vec2::new(1.0, 1.0),
+          Vec2::new(2.0, 1.0),
+          Vec2::new(2.0, 2.0),
+          Vec2::new(1.0, 2.0),
+        ],
+        vec![],
+        vec![
+          Vec2::new(2.5, 2.5),
+          Vec2::new(3.5, 2.5),
+          Vec2::new(3.5, 3.5),
+          Vec2::new(2.5, 3.5),
+        ],
+        // Clip contours.
+        vec![
+          Vec2::new(-2.0, 1.0),
+          Vec2::new(-1.0, 1.0),
+          Vec2::new(-1.0, 2.0),
+          Vec2::new(-2.0, 2.0),
+        ],
+      ],
+    },
+    contour_source_edges: vec![
+      vec![
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      ],
+      vec![],
+      vec![
+        SourceEdge { is_from_subject: true, contour: 2, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 2, edge: 1 },
+        SourceEdge { is_from_subject: true, contour: 2, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 2, edge: 3 },
+      ],
+      vec![
+        SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
+      ],
+    ],
+  };
+  assert_eq!(union(&subject, &clip), expected_union);
+  assert_eq!(xor(&subject, &clip), expected_union);
+
+  assert_eq!(
+    intersection(&subject, &clip),
+    BooleanResult {
+      polygon: Polygon { contours: vec![] },
+      contour_source_edges: vec![],
+    }
+  );
+  assert_eq!(
+    difference(&subject, &clip),
+    BooleanResult {
+      polygon: subject.clone(),
+      contour_source_edges: vec![
+        vec![
+          SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+          SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+        ],
+        vec![],
+        vec![
+          SourceEdge { is_from_subject: true, contour: 2, edge: 0 },
+          SourceEdge { is_from_subject: true, contour: 2, edge: 1 },
+          SourceEdge { is_from_subject: true, contour: 2, edge: 2 },
+          SourceEdge { is_from_subject: true, contour: 2, edge: 3 },
+        ],
+      ],
+    }
+  );
+}
+
+#[test]
+fn trivially_computes_operations_for_empty_polygons() {
+  let non_empty_polygon = Polygon {
+    contours: vec![
+      vec![
+        Vec2::new(1.0, 1.0),
+        Vec2::new(2.0, 1.0),
+        Vec2::new(2.0, 2.0),
+        Vec2::new(1.0, 2.0),
+      ],
+      // Empty contour to check that the original polygon is used "verbatim".
+      vec![],
+      vec![
+        Vec2::new(2.5, 2.5),
+        Vec2::new(3.5, 2.5),
+        Vec2::new(3.5, 3.5),
+        Vec2::new(2.5, 3.5),
+      ],
+    ],
+  };
+
+  let empty_polygon = Polygon {
+    contours: vec![
+      // Empty contour to ensure this doesn't count.
+      vec![],
+    ],
+  };
+
+  let empty_boolean_result = BooleanResult {
+    polygon: Polygon { contours: vec![] },
+    contour_source_edges: vec![],
+  };
+  let non_empty_boolean_result_as_subject = BooleanResult {
+    polygon: non_empty_polygon.clone(),
+    contour_source_edges: vec![
+      vec![
+        SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      ],
+      vec![],
+      vec![
+        SourceEdge { is_from_subject: true, contour: 2, edge: 0 },
+        SourceEdge { is_from_subject: true, contour: 2, edge: 1 },
+        SourceEdge { is_from_subject: true, contour: 2, edge: 2 },
+        SourceEdge { is_from_subject: true, contour: 2, edge: 3 },
+      ],
+    ],
+  };
+  let non_empty_boolean_result_as_clip = BooleanResult {
+    polygon: non_empty_polygon.clone(),
+    contour_source_edges: vec![
+      vec![
+        SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+        SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
+      ],
+      vec![],
+      vec![
+        SourceEdge { is_from_subject: false, contour: 2, edge: 0 },
+        SourceEdge { is_from_subject: false, contour: 2, edge: 1 },
+        SourceEdge { is_from_subject: false, contour: 2, edge: 2 },
+        SourceEdge { is_from_subject: false, contour: 2, edge: 3 },
+      ],
+    ],
+  };
+  assert_eq!(
+    union(&non_empty_polygon, &empty_polygon),
+    non_empty_boolean_result_as_subject
+  );
+  assert_eq!(
+    union(&empty_polygon, &non_empty_polygon),
+    non_empty_boolean_result_as_clip
+  );
+
+  assert_eq!(
+    intersection(&non_empty_polygon, &empty_polygon),
+    empty_boolean_result
+  );
+  assert_eq!(
+    intersection(&empty_polygon, &non_empty_polygon),
+    empty_boolean_result
+  );
+
+  assert_eq!(
+    difference(&non_empty_polygon, &empty_polygon),
+    non_empty_boolean_result_as_subject
+  );
+  assert_eq!(
+    difference(&empty_polygon, &non_empty_polygon),
+    empty_boolean_result
+  );
+
+  assert_eq!(
+    xor(&non_empty_polygon, &empty_polygon),
+    non_empty_boolean_result_as_subject
+  );
+  assert_eq!(
+    xor(&empty_polygon, &non_empty_polygon),
+    non_empty_boolean_result_as_clip
+  );
+
+  assert_eq!(union(&empty_polygon, &empty_polygon), empty_boolean_result);
+  assert_eq!(
+    intersection(&empty_polygon, &empty_polygon),
+    empty_boolean_result
+  );
+  assert_eq!(difference(&empty_polygon, &empty_polygon), empty_boolean_result);
+  assert_eq!(xor(&empty_polygon, &empty_polygon), empty_boolean_result);
 }

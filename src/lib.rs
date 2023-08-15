@@ -878,7 +878,6 @@ fn subdivide_edges(
             operation,
           );
         }
-        // TODO: See if it matters that we reordered prev and next checks.
         check_for_intersection(
           &event,
           prev_event,

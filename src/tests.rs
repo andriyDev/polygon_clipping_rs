@@ -1,4 +1,4 @@
-use std::{cmp::Reverse, collections::BinaryHeap};
+use std::{cmp::Reverse, collections::BinaryHeap, f32::INFINITY};
 
 use glam::Vec2;
 use rand::seq::SliceRandom;
@@ -186,6 +186,7 @@ fn creates_events_for_polygon() {
     /* is_subject= */ true,
     &mut event_queue,
     &mut event_relations,
+    /* x_limit= */ INFINITY,
   );
   let event_queue = event_queue_to_vec(event_queue);
   assert_eq!(
@@ -402,6 +403,125 @@ fn creates_events_for_polygon() {
         sibling_id: 14,
         sibling_point: Vec2::new(5.0, 2.0),
         source_edge: SourceEdge { is_from_subject: true, contour: 1, edge: 3 },
+        ..Default::default()
+      },
+    ]
+  );
+}
+
+#[test]
+fn creates_events_for_polygon_with_x_limit() {
+  let polygon = Polygon {
+    contours: vec![
+      vec![
+        Vec2::new(1.0, 1.0),
+        Vec2::new(3.0, 1.0),
+        Vec2::new(3.0, 3.0),
+        Vec2::new(1.0, 3.0),
+      ],
+      vec![
+        Vec2::new(4.0, 1.0),
+        Vec2::new(5.0, 1.0),
+        Vec2::new(6.0, 2.0),
+        Vec2::new(5.0, 2.0),
+      ],
+    ],
+  };
+
+  let mut event_queue = BinaryHeap::new();
+  let mut event_relations = Vec::new();
+  create_events_for_polygon(
+    &polygon,
+    /* is_subject= */ true,
+    &mut event_queue,
+    &mut event_relations,
+    /* x_limit= */ 2.0,
+  );
+  let event_queue = event_queue_to_vec(event_queue);
+  assert_eq!(
+    event_queue,
+    [
+      Event {
+        event_id: 0,
+        point: Vec2::new(1.0, 1.0),
+        left: true,
+        is_subject: true,
+        other_point: Vec2::new(3.0, 1.0),
+      },
+      Event {
+        event_id: 5,
+        point: Vec2::new(1.0, 1.0),
+        left: true,
+        is_subject: true,
+        other_point: Vec2::new(1.0, 3.0),
+      },
+      Event {
+        event_id: 4,
+        point: Vec2::new(1.0, 3.0),
+        left: false,
+        is_subject: true,
+        other_point: Vec2::new(1.0, 1.0),
+      },
+      Event {
+        event_id: 3,
+        point: Vec2::new(1.0, 3.0),
+        left: true,
+        is_subject: true,
+        other_point: Vec2::new(3.0, 3.0),
+      },
+      Event {
+        event_id: 1,
+        point: Vec2::new(3.0, 1.0),
+        left: false,
+        is_subject: true,
+        other_point: Vec2::new(1.0, 1.0),
+      },
+      Event {
+        event_id: 2,
+        point: Vec2::new(3.0, 3.0),
+        left: false,
+        is_subject: true,
+        other_point: Vec2::new(1.0, 3.0),
+      },
+    ]
+  );
+  assert_eq!(
+    event_relations,
+    [
+      EventRelation {
+        sibling_id: 1,
+        sibling_point: Vec2::new(3.0, 1.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 0,
+        sibling_point: Vec2::new(1.0, 1.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 3,
+        sibling_point: Vec2::new(1.0, 3.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 2,
+        sibling_point: Vec2::new(3.0, 3.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 5,
+        sibling_point: Vec2::new(1.0, 1.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+        ..Default::default()
+      },
+      EventRelation {
+        sibling_id: 4,
+        sibling_point: Vec2::new(1.0, 3.0),
+        source_edge: SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
         ..Default::default()
       },
     ]

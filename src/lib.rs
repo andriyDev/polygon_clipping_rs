@@ -1,6 +1,7 @@
 use std::{
   cmp::Reverse,
   collections::{BinaryHeap, HashMap},
+  f32::INFINITY,
 };
 
 use glam::Vec2;
@@ -170,24 +171,36 @@ fn perform_boolean(
     }
   }
 
+  // We know the bounds are not None, since those cases are trivially computed.
+  let subject_bounds = subject_bounds.unwrap();
+  let clip_bounds = clip_bounds.unwrap();
+
   let mut event_queue = BinaryHeap::new();
   let mut event_relations = Vec::new();
+
+  let x_limit = match operation {
+    Operation::Intersection => subject_bounds.1.x.min(clip_bounds.1.x),
+    Operation::Difference => subject_bounds.1.x,
+    Operation::Union | Operation::XOR => INFINITY,
+  };
 
   create_events_for_polygon(
     subject,
     /* is_subject= */ true,
     &mut event_queue,
     &mut event_relations,
+    x_limit,
   );
   create_events_for_polygon(
     clip,
     /* is_subject= */ false,
     &mut event_queue,
     &mut event_relations,
+    x_limit,
   );
 
   let result_events =
-    subdivide_edges(event_queue, &mut event_relations, operation);
+    subdivide_edges(event_queue, &mut event_relations, operation, x_limit);
   join_contours(result_events, event_relations, operation)
 }
 
@@ -431,6 +444,7 @@ fn create_events_for_polygon(
   is_subject: bool,
   event_queue: &mut BinaryHeap<Reverse<Event>>,
   event_relations: &mut Vec<EventRelation>,
+  x_limit: f32,
 ) {
   for (contour_index, contour) in polygon.contours.iter().enumerate() {
     for point_index in 0..contour.len() {
@@ -439,6 +453,11 @@ fn create_events_for_polygon(
 
       let point_1 = contour[point_index];
       let point_2 = contour[next_point_index];
+      // This entire edge is passed the `x_limit`, so it will never be
+      // processed.
+      if x_limit < point_1.x.min(point_2.x) {
+        continue;
+      }
       let (event_1_left, event_2_left) =
         match lex_order_points(&point_1, &point_2) {
           std::cmp::Ordering::Equal => continue, // Ignore degenerate edges.
@@ -817,15 +836,22 @@ fn set_information(
 
 // Goes through the `event_queue` and subdivides intersecting edges. Returns a
 // Vec of events corresponding to the edges that are in the final result based
-// on `operation`.
+// on `operation`. Events to the right of `x_limit` will be skipped.
 fn subdivide_edges(
   mut event_queue: BinaryHeap<Reverse<Event>>,
   event_relations: &mut Vec<EventRelation>,
   operation: Operation,
+  x_limit: f32,
 ) -> Vec<Event> {
   let mut sweep_line = Vec::new();
   let mut result = Vec::new();
   while let Some(Reverse(event)) = event_queue.pop() {
+    // Every event in `event_queue` must have a greater X value, so we can skip
+    // all remaining events.
+    if x_limit < event.point.x {
+      break;
+    }
+
     if event.left {
       let sweep_line_event = SweepLineEvent(event.clone());
       let pos = sweep_line

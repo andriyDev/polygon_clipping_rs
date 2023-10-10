@@ -521,61 +521,64 @@ impl PartialEq for SweepLineEvent {
 }
 impl PartialOrd for SweepLineEvent {
   fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-    // This is primarily use for a sorted Vec, so here we will say "prefer" to
-    // mean less.
+    // We want to sort the events (i.e., edges) by their height. For edges that
+    // cross, we want to order by their leftmost points. Note since these events
+    // are part of the sweep line, we can assume the sweep line intersects both
+    // lines at at least one X coordinate).
 
-    // If the other edge is colinear, order the events normally.
-    if self.is_colinear(other) {
-      return self.0.partial_cmp(&other.0);
+    // Pick the leftmost point.
+    if self.0.point.x < other.0.point.x {
+      // Use `self's line to determine the ordering.
+      match point_relative_to_line(
+        self.0.point,
+        self.0.other_point,
+        other.0.point,
+      ) {
+        std::cmp::Ordering::Equal => {}
+        order => return Some(order),
+      }
+
+      // `other`s left point is on `self`s line, so use `other`s right point to
+      // order the edges.
+      match point_relative_to_line(
+        self.0.point,
+        self.0.other_point,
+        other.0.other_point,
+      ) {
+        std::cmp::Ordering::Equal => {}
+        order => return Some(order),
+      }
+    } else {
+      // Use `other`s line to determine the ordering.
+      match point_relative_to_line(
+        other.0.point,
+        other.0.other_point,
+        self.0.point,
+      ) {
+        std::cmp::Ordering::Equal => {}
+        order => return Some(order.reverse()),
+      }
+
+      // `self`s left point is on `other`s line, so use `self`s right point to
+      // order the edges.
+      match point_relative_to_line(
+        other.0.point,
+        other.0.other_point,
+        self.0.other_point,
+      ) {
+        std::cmp::Ordering::Equal => {}
+        order => return Some(order.reverse()),
+      }
     }
 
-    if self.0.point.x == other.0.point.x {
-      return match self.0.point.y.partial_cmp(&other.0.point.y).unwrap() {
-        // The left points are equal, so what determines order is the right
-        // points, aka the slopes of the edges.
-        std::cmp::Ordering::Equal => Some(point_relative_to_line(
-          self.0.point,
-          self.0.other_point,
-          other.0.other_point,
-        )),
-        // The x coordinate is still the same, so the order of the edges is
-        // determined by the vertical position.
-        ord => Some(ord),
-      };
-    }
-
-    // Otherwise, find the event that is leftmost and order based on its line.
-    Some(match self.0.cmp(&other.0) {
-      // The left points are not equal, so the events cannot be equal.
-      std::cmp::Ordering::Equal => unreachable!(),
-      std::cmp::Ordering::Greater => {
-        point_relative_to_line(other.0.point, other.0.other_point, self.0.point)
-          .reverse()
-      }
-      std::cmp::Ordering::Less => {
-        point_relative_to_line(self.0.point, self.0.other_point, other.0.point)
-      }
-    })
+    // The lines are colinear. Just order by the events to disambiguate.
+    self.0.partial_cmp(&other.0)
   }
 }
 impl Eq for SweepLineEvent {}
 impl Ord for SweepLineEvent {
   fn cmp(&self, other: &Self) -> std::cmp::Ordering {
     self.partial_cmp(other).unwrap()
-  }
-}
-
-impl SweepLineEvent {
-  // Returns if the `other` edge is colinear with the `self` edge.
-  fn is_colinear(&self, other: &Self) -> bool {
-    point_relative_to_line(self.0.point, self.0.other_point, other.0.point)
-      .is_eq()
-      && point_relative_to_line(
-        self.0.point,
-        self.0.other_point,
-        other.0.other_point,
-      )
-      .is_eq()
   }
 }
 

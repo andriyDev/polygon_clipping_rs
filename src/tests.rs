@@ -1,4 +1,8 @@
-use std::{cmp::Reverse, collections::BinaryHeap, f32::INFINITY};
+use std::{
+  cmp::Reverse,
+  collections::BinaryHeap,
+  f32::{EPSILON, INFINITY},
+};
 
 use glam::Vec2;
 use rand::seq::SliceRandom;
@@ -2218,6 +2222,53 @@ fn floating_point_inaccuracy_polygons() {
       SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
       SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
       SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+    ]]
+  );
+}
+
+#[test]
+fn sweep_line_point_on_other_edge() {
+  let subject = Polygon {
+    contours: vec![vec![
+      Vec2::new(-1.0 + EPSILON, 0.0),
+      Vec2::new(-1.0 + EPSILON, 1.0 - EPSILON),
+      Vec2::new(-2.0 + EPSILON, 2.0 - EPSILON),
+      Vec2::new(-2.0 + EPSILON, 0.0),
+    ]],
+  };
+  let clip = Polygon {
+    contours: vec![vec![
+      Vec2::new(-2.0 + EPSILON, 0.01 + EPSILON),
+      Vec2::new(-2.0 + EPSILON, -0.01 + EPSILON),
+      Vec2::new(-1.0, -0.01 + EPSILON),
+      Vec2::new(-1.0, 0.01 + EPSILON),
+    ]],
+  };
+  let BooleanResult { polygon, contour_source_edges } = union(&subject, &clip);
+  assert_eq!(
+    polygon,
+    Polygon {
+      contours: vec![vec![
+        clip.contours[0][1],
+        clip.contours[0][2],
+        subject.contours[0][0],
+        subject.contours[0][1],
+        subject.contours[0][2],
+        clip.contours[0][0],
+        subject.contours[0][3],
+      ]]
+    }
+  );
+  assert_eq!(
+    contour_source_edges,
+    vec![vec![
+      SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+      SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+      SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
     ]]
   );
 }

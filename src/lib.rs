@@ -1,7 +1,7 @@
 use std::{
   cmp::Reverse,
   collections::{BinaryHeap, HashMap},
-  f32::INFINITY,
+  f32::{EPSILON, INFINITY},
 };
 
 use glam::Vec2;
@@ -305,7 +305,7 @@ fn lex_order_points(a: &Vec2, b: &Vec2) -> std::cmp::Ordering {
 impl Event {
   // Determines whether the edge is a vertical edge.
   fn is_vertical(&self) -> bool {
-    self.point.x == self.other_point.x
+    (self.point.x - self.other_point.x).abs() < EPSILON
   }
 
   // Determine whether `self` and `relation` imply the edge is in the result
@@ -599,13 +599,19 @@ fn check_for_intersection(
     EdgeIntersectionResult::NoIntersection => {} // Do nothing.
     EdgeIntersectionResult::PointIntersection(point) => {
       // Split the edges, but only if the the split point isn't at an end point.
-      if point != new_event.point
-        && point != event_relations[new_event.event_id].sibling_point
+      if !point.abs_diff_eq(new_event.point, EPSILON)
+        && !point.abs_diff_eq(
+          event_relations[new_event.event_id].sibling_point,
+          EPSILON,
+        )
       {
         split_edge(new_event, point, event_queue, event_relations);
       }
-      if point != existing_event.point
-        && point != event_relations[existing_event.event_id].sibling_point
+      if !point.abs_diff_eq(existing_event.point, EPSILON)
+        && !point.abs_diff_eq(
+          event_relations[existing_event.event_id].sibling_point,
+          EPSILON,
+        )
       {
         split_edge(existing_event, point, event_queue, event_relations);
       }
@@ -613,8 +619,11 @@ fn check_for_intersection(
     EdgeIntersectionResult::LineIntersection(start, end) => {
       let new_event_coincident_event_id;
       match (
-        start == new_event.point,
-        end == event_relations[new_event.event_id].sibling_point,
+        start.abs_diff_eq(new_event.point, EPSILON),
+        end.abs_diff_eq(
+          event_relations[new_event.event_id].sibling_point,
+          EPSILON,
+        ),
       ) {
         (true, true) => {
           // The edge is fully covered, so no new splits are necessary.
@@ -637,8 +646,11 @@ fn check_for_intersection(
 
       let existing_event_coincident_event_id;
       match (
-        start == existing_event.point,
-        end == event_relations[existing_event.event_id].sibling_point,
+        start.abs_diff_eq(existing_event.point, EPSILON),
+        end.abs_diff_eq(
+          event_relations[existing_event.event_id].sibling_point,
+          EPSILON,
+        ),
       ) {
         (true, true) => {
           // The edge is fully covered, so no new splits are necessary.
@@ -1036,7 +1048,9 @@ fn compute_contour(
     let result_id =
       event_id_to_contour_flags[&current_event.event_id].result_id;
     if 0 < result_id
-      && result_events[result_id - 1].point == current_event.point
+      && result_events[result_id - 1]
+        .point
+        .abs_diff_eq(current_event.point, EPSILON)
     {
       current_event = &result_events[result_id - 1];
       event_id_to_contour_flags
@@ -1047,10 +1061,13 @@ fn compute_contour(
       // One of the adjacent events in `result_events` must be connected to
       // the current event, panic otherwise.
       debug_assert!(result_id + 1 < result_events.len());
-      debug_assert_eq!(
+      debug_assert!(
+        result_events[result_id + 1]
+          .point
+          .abs_diff_eq(current_event.point, EPSILON),
+        "left={}, right={}, result_id={}, event_id={}",
         result_events[result_id + 1].point,
         current_event.point,
-        "result_id={}, event_id={}",
         result_id,
         current_event.event_id,
       );

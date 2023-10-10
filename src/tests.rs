@@ -2171,3 +2171,53 @@ fn trivially_computes_operations_for_empty_polygons() {
   assert_eq!(difference(&empty_polygon, &empty_polygon), empty_boolean_result);
   assert_eq!(xor(&empty_polygon, &empty_polygon), empty_boolean_result);
 }
+
+#[test]
+fn floating_point_inaccuracy_polygons() {
+  let subject = Polygon {
+    contours: vec![vec![
+      Vec2::new(2.0, 0.0),
+      Vec2::new(1.0, 0.0),
+      Vec2::new(1.0, -2.0),
+      Vec2::new(2.0, -1.0),
+    ]],
+  };
+  let clip = Polygon {
+    contours: vec![vec![
+      Vec2::new(2.0, -0.01),
+      Vec2::new(2.0, 0.01),
+      Vec2::new(1.0, 0.01),
+      Vec2::new(1.0, -0.01),
+    ]],
+  };
+
+  let BooleanResult { polygon, contour_source_edges } = union(&subject, &clip);
+  assert_eq!(
+    polygon,
+    Polygon {
+      contours: vec![vec![
+        Vec2::new(1.0, -2.0),
+        Vec2::new(2.0, -1.0),
+        Vec2::new(2.0, -0.01),
+        Vec2::new(2.0, 0.0),
+        Vec2::new(2.0, 0.01),
+        Vec2::new(1.0, 0.01),
+        Vec2::new(1.0, 0.0),
+        Vec2::new(1.0, -0.01),
+      ]]
+    }
+  );
+  assert_eq!(
+    contour_source_edges,
+    vec![vec![
+      SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+      SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+      SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+    ]]
+  );
+}

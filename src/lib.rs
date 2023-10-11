@@ -1069,7 +1069,7 @@ fn compute_contour(
         result_events[result_id + 1]
           .point
           .abs_diff_eq(current_event.point, EPSILON),
-        "left={}, right={}, result_id={}, event_id={}",
+        "Expected event to be connected to an adjacent event. left={}, right={}, result_id={}, event_id={}",
         result_events[result_id + 1].point,
         current_event.point,
         result_id,

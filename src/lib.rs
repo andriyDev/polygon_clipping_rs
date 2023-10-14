@@ -290,15 +290,19 @@ impl Ord for Event {
 // Determine the lexical order of `a` and `b`. In other words, sort by x, then
 // y.
 fn lex_order_points(a: &Vec2, b: &Vec2) -> std::cmp::Ordering {
-  match a.x.partial_cmp(&b.x) {
-    Some(std::cmp::Ordering::Equal) => {}
-    Some(ord) => return ord,
-    None => panic!(),
+  if (a.x - b.x).abs() > EPSILON {
+    match a.x.partial_cmp(&b.x) {
+      Some(std::cmp::Ordering::Equal) => unreachable!(),
+      Some(ord) => return ord,
+      None => panic!(),
+    }
   }
-  match a.y.partial_cmp(&b.y) {
-    Some(std::cmp::Ordering::Equal) => {}
-    Some(ord) => return ord,
-    None => panic!(),
+  if (a.y - b.y).abs() > EPSILON {
+    match a.y.partial_cmp(&b.y) {
+      Some(std::cmp::Ordering::Equal) => unreachable!(),
+      Some(ord) => return ord,
+      None => panic!(),
+    }
   }
   std::cmp::Ordering::Equal
 }
@@ -1082,7 +1086,7 @@ fn compute_contour(
     &result_events,
   );
 
-  while current_event.point != start_event.point {
+  while !current_event.point.abs_diff_eq(start_event.point, EPSILON) {
     let result_id =
       event_id_to_contour_flags[&current_event.event_id].result_id;
     if 0 < result_id

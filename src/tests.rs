@@ -2345,3 +2345,51 @@ fn overlapping_edges_with_extra_on_both_ends() {
     ]]
   );
 }
+
+#[test]
+fn overlapping_edges_with_extra_on_both_ends_with_epsilon() {
+  let subject = Polygon {
+    contours: vec![vec![
+      Vec2::new(0.0, 1.0 - EPSILON),
+      Vec2::new(0.0, 2.0 - EPSILON),
+      Vec2::new(-2.0 + EPSILON, 2.0 - EPSILON),
+      Vec2::new(-1.0 + EPSILON, 1.0 - EPSILON),
+    ]],
+  };
+  let clip = Polygon {
+    contours: vec![vec![
+      Vec2::new(-0.01 + EPSILON, 1.0),
+      Vec2::new(0.01 - EPSILON, 1.0),
+      Vec2::new(0.01 - EPSILON, 2.0 - EPSILON),
+      Vec2::new(-0.01 + EPSILON, 2.0 - EPSILON),
+    ]],
+  };
+
+  let BooleanResult { polygon, contour_source_edges } = union(&subject, &clip);
+  assert_eq!(
+    polygon,
+    Polygon {
+      contours: vec![vec![
+        Vec2::new(-2.0 + EPSILON, 2.0 - EPSILON),
+        Vec2::new(-1.0 + EPSILON, 1.0 - EPSILON),
+        Vec2::new(0.0, 1.0),
+        Vec2::new(0.01 - EPSILON, 1.0),
+        Vec2::new(0.01 - EPSILON, 2.0 - EPSILON),
+        Vec2::new(0.0, 2.0 - EPSILON),
+        Vec2::new(-0.01 + EPSILON, 2.0 - EPSILON),
+      ]]
+    }
+  );
+  assert_eq!(
+    contour_source_edges,
+    vec![vec![
+      SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+      SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+      SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+    ]]
+  );
+}

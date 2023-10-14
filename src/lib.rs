@@ -376,7 +376,11 @@ impl Event {
 // by `a` and `b`. Note if b is to the left of a, the returned ordering will be
 // reversed.
 fn point_relative_to_line(a: Vec2, b: Vec2, point: Vec2) -> std::cmp::Ordering {
-  0.0.partial_cmp(&(b - a).perp_dot(point - a)).unwrap()
+  let distance_to_line = (b - a).perp_dot(point - a);
+  if distance_to_line.abs() < EPSILON {
+    return std::cmp::Ordering::Equal;
+  }
+  0.0.partial_cmp(&distance_to_line).unwrap()
 }
 
 // The relationship of the event to the rest of the edges. While `Event` is

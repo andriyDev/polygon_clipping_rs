@@ -2272,3 +2272,76 @@ fn sweep_line_point_on_other_edge() {
     ]]
   );
 }
+
+#[test]
+fn overlapping_edges_with_extra_on_both_ends() {
+  let subject = Polygon {
+    contours: vec![vec![
+      Vec2::new(2.0, 2.0),
+      Vec2::new(2.0, 1.0),
+      Vec2::new(4.0, 1.0),
+      Vec2::new(3.0, 2.0),
+    ]],
+  };
+  let clip = Polygon {
+    contours: vec![vec![
+      Vec2::new(2.01, 2.0),
+      Vec2::new(1.99, 2.0),
+      Vec2::new(1.99, 1.0),
+      Vec2::new(2.01, 1.0),
+    ]],
+  };
+
+  let BooleanResult { polygon, contour_source_edges } = union(&subject, &clip);
+  assert_eq!(
+    polygon,
+    Polygon {
+      contours: vec![vec![
+        Vec2::new(1.99, 1.0),
+        Vec2::new(2.0, 1.0),
+        Vec2::new(2.01, 1.0),
+        Vec2::new(4.0, 1.0),
+        Vec2::new(3.0, 2.0),
+        Vec2::new(2.01, 2.0),
+        Vec2::new(2.0, 2.0),
+        Vec2::new(1.99, 2.0),
+      ]]
+    }
+  );
+  assert_eq!(
+    contour_source_edges,
+    vec![vec![
+      SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+      SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+    ]]
+  );
+
+  let BooleanResult { polygon, contour_source_edges } =
+    intersection(&subject, &clip);
+  assert_eq!(
+    polygon,
+    Polygon {
+      contours: vec![vec![
+        Vec2::new(2.0, 1.0),
+        Vec2::new(2.01, 1.0),
+        Vec2::new(2.01, 2.0),
+        Vec2::new(2.0, 2.0),
+      ]]
+    }
+  );
+  assert_eq!(
+    contour_source_edges,
+    vec![vec![
+      SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+      SourceEdge { is_from_subject: false, contour: 0, edge: 3 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
+    ]]
+  );
+}

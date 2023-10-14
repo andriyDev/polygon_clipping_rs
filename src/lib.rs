@@ -621,6 +621,14 @@ fn check_for_intersection(
       }
     }
     EdgeIntersectionResult::LineIntersection(start, end) => {
+      // Note: line intersections can only happen with the previous event (not
+      // the next event) in the sweep line. This is because a line intersection
+      // means that the edges are colinear and in that case, sweep line events
+      // are just sorted by their event ordering. Since we iterate through
+      // events in event ordering, and the sweep line is ordered by event
+      // ordering, the second edge will be sorted after the first edge.
+      assert_ne!(existing_event.is_subject, new_event.is_subject, "Edges should never be coincident with their own polygon's edges. This is a poorly formed polygon.");
+
       let new_event_coincident_event_id;
       match (
         start.abs_diff_eq(new_event.point, EPSILON),
@@ -811,6 +819,28 @@ fn set_information(
       event_relation.other_in_out = true;
     }
     Some((prev_event, prev_event_relation)) => {
+      if event_relation.edge_coincidence_type
+        == EdgeCoincidenceType::DuplicateCoincidence
+      {
+        debug_assert_ne!(
+          prev_event_relation.edge_coincidence_type,
+          EdgeCoincidenceType::NoCoincidence,
+        );
+        if event.is_subject == prev_event.is_subject {
+          event_relation.in_out = prev_event_relation.in_out;
+          event_relation.other_in_out = prev_event_relation.other_in_out;
+        } else {
+          event_relation.in_out = prev_event_relation.other_in_out;
+          event_relation.other_in_out = prev_event_relation.in_out;
+        }
+        event_relation.prev_in_result = if prev_event_relation.in_result {
+          Some(prev_event.event_id)
+        } else {
+          prev_event_relation.prev_in_result
+        };
+        return;
+      }
+
       if event.is_subject == prev_event.is_subject {
         // The events are from the same polygon, so this event should be the
         // opposite of `prev_event`.

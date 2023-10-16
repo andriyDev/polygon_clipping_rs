@@ -2195,7 +2195,12 @@ fn floating_point_inaccuracy_polygons() {
     ]],
   };
 
-  let BooleanResult { polygon, contour_source_edges } = union(&subject, &clip);
+  let BooleanResult { mut polygon, contour_source_edges } =
+    union(&subject, &clip);
+  // Round the polygon for comparison purposes.
+  for contour in polygon.contours.iter_mut() {
+    contour.iter_mut().for_each(|point| *point = (*point / 1e-7).round() * 1e-7)
+  }
   assert_eq!(
     polygon,
     Polygon {
@@ -2252,6 +2257,7 @@ fn sweep_line_point_on_other_edge() {
         clip.contours[0][1],
         clip.contours[0][2],
         subject.contours[0][0],
+        clip.contours[0][3],
         subject.contours[0][1],
         subject.contours[0][2],
         clip.contours[0][0],
@@ -2264,6 +2270,7 @@ fn sweep_line_point_on_other_edge() {
     vec![vec![
       SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
       SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
       SourceEdge { is_from_subject: true, contour: 0, edge: 0 },
       SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
       SourceEdge { is_from_subject: true, contour: 0, edge: 2 },

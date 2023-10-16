@@ -310,7 +310,7 @@ fn lex_order_points(a: &Vec2, b: &Vec2) -> std::cmp::Ordering {
 impl Event {
   // Determines whether the edge is a vertical edge.
   fn is_vertical(&self) -> bool {
-    (self.point.x - self.other_point.x).abs() < EPSILON
+    (self.point.x - self.other_point.x).abs() <= EPSILON
   }
 
   // Determine whether `self` and `relation` imply the edge is in the result
@@ -381,7 +381,7 @@ impl Event {
 // reversed.
 fn point_relative_to_line(a: Vec2, b: Vec2, point: Vec2) -> std::cmp::Ordering {
   let distance_to_line = (b - a).perp_dot(point - a);
-  if distance_to_line.abs() < EPSILON {
+  if distance_to_line.abs() <= EPSILON {
     return std::cmp::Ordering::Equal;
   }
   0.0.partial_cmp(&distance_to_line).unwrap()

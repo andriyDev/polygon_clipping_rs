@@ -1,3 +1,5 @@
+use std::f32::EPSILON;
+
 use glam::Vec2;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -49,7 +51,7 @@ pub fn edge_intersection(
   // overlapping, or there is no intersection.
   let cross = relative_start.perp_dot(line_1_vector);
 
-  if cross.abs() > 0.0 {
+  if cross.abs() > EPSILON {
     // Lines are not on the same line, so no overlap.
     return EdgeIntersectionResult::NoIntersection;
   }

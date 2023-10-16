@@ -2372,6 +2372,7 @@ fn overlapping_edges_with_extra_on_both_ends_with_epsilon() {
       contours: vec![vec![
         Vec2::new(-2.0 + EPSILON, 2.0 - EPSILON),
         Vec2::new(-1.0 + EPSILON, 1.0 - EPSILON),
+        Vec2::new(-0.01 + EPSILON, 1.0),
         Vec2::new(0.0, 1.0),
         Vec2::new(0.01 - EPSILON, 1.0),
         Vec2::new(0.01 - EPSILON, 2.0 - EPSILON),
@@ -2384,6 +2385,7 @@ fn overlapping_edges_with_extra_on_both_ends_with_epsilon() {
     contour_source_edges,
     vec![vec![
       SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
       SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
       SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
       SourceEdge { is_from_subject: false, contour: 0, edge: 1 },

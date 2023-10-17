@@ -2402,3 +2402,57 @@ fn overlapping_edges_with_extra_on_both_ends_with_epsilon() {
     ]]
   );
 }
+
+#[test]
+fn floating_point_inaccuracy_polygons_2() {
+  let subject = Polygon {
+    contours: vec![vec![
+      Vec2::new(2.0, 8.74227765e-8),
+      Vec2::new(1.0, 1.74845553E-7),
+      Vec2::new(0.999999761, -1.99999988),
+      Vec2::new(1.99999988, -0.99999994),
+    ]],
+  };
+  let clip = Polygon {
+    contours: vec![vec![
+      Vec2::new(2.0, -0.009999956),
+      Vec2::new(2.0, 0.0100000435),
+      Vec2::new(1.0, 0.0100000873),
+      Vec2::new(1.0, -0.00999991223),
+    ]],
+  };
+
+  let BooleanResult { mut polygon, contour_source_edges } =
+    union(&subject, &clip);
+  // Round the polygon for comparison purposes.
+  for contour in polygon.contours.iter_mut() {
+    contour.iter_mut().for_each(|point| *point = (*point / 1e-7).round() * 1e-7)
+  }
+  let mut expected_polygon = Polygon {
+    contours: vec![vec![
+      subject.contours[0][2],
+      subject.contours[0][3],
+      clip.contours[0][0],
+      subject.contours[0][0],
+      clip.contours[0][1],
+      clip.contours[0][2],
+      subject.contours[0][1],
+    ]],
+  };
+  for contour in expected_polygon.contours.iter_mut() {
+    contour.iter_mut().for_each(|point| *point = (*point / 1e-7).round() * 1e-7)
+  }
+  assert_eq!(polygon, expected_polygon);
+  assert_eq!(
+    contour_source_edges,
+    vec![vec![
+      SourceEdge { is_from_subject: true, contour: 0, edge: 2 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 3 },
+      SourceEdge { is_from_subject: false, contour: 0, edge: 0 },
+      SourceEdge { is_from_subject: false, contour: 0, edge: 1 },
+      SourceEdge { is_from_subject: false, contour: 0, edge: 2 },
+      SourceEdge { is_from_subject: true, contour: 0, edge: 1 },
+    ]]
+  );
+}

@@ -827,28 +827,6 @@ fn set_information(
       event_relation.other_in_out = true;
     }
     Some((prev_event, prev_event_relation)) => {
-      if event_relation.edge_coincidence_type
-        == EdgeCoincidenceType::DuplicateCoincidence
-      {
-        debug_assert_ne!(
-          prev_event_relation.edge_coincidence_type,
-          EdgeCoincidenceType::NoCoincidence,
-        );
-        if event.is_subject == prev_event.is_subject {
-          event_relation.in_out = prev_event_relation.in_out;
-          event_relation.other_in_out = prev_event_relation.other_in_out;
-        } else {
-          event_relation.in_out = prev_event_relation.other_in_out;
-          event_relation.other_in_out = prev_event_relation.in_out;
-        }
-        event_relation.prev_in_result = if prev_event_relation.in_result {
-          Some(prev_event.event_id)
-        } else {
-          prev_event_relation.prev_in_result
-        };
-        return;
-      }
-
       if event.is_subject == prev_event.is_subject {
         // The events are from the same polygon, so this event should be the
         // opposite of `prev_event`.

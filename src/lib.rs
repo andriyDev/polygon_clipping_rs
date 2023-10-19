@@ -691,14 +691,19 @@ fn check_for_intersection(
         }
       }
 
+      // We should only process the overlapping edges once. If the coincident
+      // events aren't the original events, we'll get a second chance to process
+      // the overlap later (since one of the coincident events is new, it will
+      // be added to the event queue and be processed where we'll detect the
+      // intersection again).
+      if new_event_coincident_event_id != new_event.event_id
+        || existing_event_coincident_event_id != existing_event.event_id
+      {
+        return;
+      }
+
       let same_transition = event_relations[new_event.event_id].in_out
         == event_relations[existing_event.event_id].in_out;
-
-      // The prev_in_result of the new edge can sometimes equal the pre-existing
-      // edge. Since the edges are intersecting, their prev_in_result
-      // should match (since neither is "more important").
-      event_relations[new_event_coincident_event_id].prev_in_result =
-        event_relations[existing_event.event_id].prev_in_result;
 
       // We say the "primary" coincident edge is the one that will represent
       // both edges. The "duplicate" coincident edge will not contribute to the

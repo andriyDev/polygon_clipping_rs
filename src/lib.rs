@@ -593,14 +593,15 @@ impl Ord for SweepLineEvent {
 
 // Check for intersections between two events in the sweep line. `new_event` is
 // the event just inserted into the sweep line and `existing_event` is the event
-// that was already in the sweep line.
+// that was already in the sweep line. Returns true if the `new_event` and
+// `existing_event` are coincident (by the end).
 fn check_for_intersection(
   new_event: &Event,
   existing_event: &Event,
   event_queue: &mut BinaryHeap<Reverse<Event>>,
   event_relations: &mut Vec<EventRelation>,
   operation: Operation,
-) {
+) -> bool {
   match edge_intersection(
     (new_event.point, event_relations[new_event.event_id].sibling_point),
     (
@@ -608,7 +609,7 @@ fn check_for_intersection(
       event_relations[existing_event.event_id].sibling_point,
     ),
   ) {
-    EdgeIntersectionResult::NoIntersection => {} // Do nothing.
+    EdgeIntersectionResult::NoIntersection => false, // Do nothing.
     EdgeIntersectionResult::PointIntersection(point) => {
       // Split the edges, but only if the the split point isn't at an end point.
       if !point.abs_diff_eq(new_event.point, EPSILON)
@@ -627,6 +628,7 @@ fn check_for_intersection(
       {
         split_edge(existing_event, point, event_queue, event_relations);
       }
+      false
     }
     EdgeIntersectionResult::LineIntersection(start, end) => {
       // Note: line intersections can only happen with the previous event (not
@@ -699,7 +701,7 @@ fn check_for_intersection(
       if new_event_coincident_event_id != new_event.event_id
         || existing_event_coincident_event_id != existing_event.event_id
       {
-        return;
+        return false;
       }
 
       let same_transition = event_relations[new_event.event_id].in_out
@@ -754,6 +756,8 @@ fn check_for_intersection(
       duplicate_edge_relation.edge_coincidence_type =
         EdgeCoincidenceType::DuplicateCoincidence;
       duplicate_edge_relation.in_result = false;
+
+      true
     }
   }
 }
@@ -871,6 +875,30 @@ fn set_information(
   event_relation.in_result = event.in_result(event_relation, operation);
 }
 
+fn set_information_for_sweep_line_event(
+  sweep_line: &mut [SweepLineEvent],
+  index: usize,
+  event_relations: &mut [EventRelation],
+  operation: Operation,
+) {
+  let event = &sweep_line[index].0;
+  let event_relation;
+  let prev_event_pair;
+
+  if index == 0 {
+    event_relation = &mut event_relations[event.event_id];
+    prev_event_pair = None;
+  } else {
+    let prev_event = &sweep_line[index - 1].0;
+    let prev_event_relation;
+    (event_relation, prev_event_relation) =
+      borrow_two_mut(event_relations, event.event_id, prev_event.event_id);
+    prev_event_pair = Some((prev_event, &*prev_event_relation));
+  }
+
+  set_information((event, event_relation), prev_event_pair, operation)
+}
+
 // Goes through the `event_queue` and subdivides intersecting edges. Returns a
 // Vec of events corresponding to the edges that are in the final result based
 // on `operation`. Events to the right of `x_limit` will be skipped.
@@ -895,42 +923,53 @@ fn subdivide_edges(
         .binary_search(&sweep_line_event)
         .expect_err("event is new and must be inserted");
       sweep_line.insert(pos, sweep_line_event);
-      if pos == 0 {
-        set_information(
-          (&event, &mut event_relations[event.event_id]),
-          /* prev_event= */ None,
+      set_information_for_sweep_line_event(
+        &mut sweep_line,
+        pos,
+        event_relations,
+        operation,
+      );
+      if pos != sweep_line.len() - 1
+        && check_for_intersection(
+          &sweep_line[pos].0,
+          &sweep_line[pos + 1].0,
+          &mut event_queue,
+          event_relations,
           operation,
         )
-      } else {
-        let prev_event = &sweep_line[pos - 1].0;
-        {
-          let (event_relation, prev_event_relation) = borrow_two_mut(
-            event_relations,
-            event.event_id,
-            prev_event.event_id,
-          );
-          set_information(
-            (&event, event_relation),
-            Some((prev_event, prev_event_relation)),
-            operation,
-          );
-        }
-        check_for_intersection(
-          &event,
-          prev_event,
-          &mut event_queue,
+      {
+        set_information_for_sweep_line_event(
+          &mut sweep_line,
+          pos,
+          event_relations,
+          operation,
+        );
+        set_information_for_sweep_line_event(
+          &mut sweep_line,
+          pos + 1,
           event_relations,
           operation,
         );
       }
-      if pos + 1 < sweep_line.len() {
-        // If the inserted event isn't last, check for intersection with next
-        // event.
-        let next_event = &sweep_line[pos + 1].0;
-        check_for_intersection(
-          &event,
-          next_event,
+
+      if pos != 0
+        && check_for_intersection(
+          &sweep_line[pos].0,
+          &sweep_line[pos - 1].0,
           &mut event_queue,
+          event_relations,
+          operation,
+        )
+      {
+        set_information_for_sweep_line_event(
+          &mut sweep_line,
+          pos - 1,
+          event_relations,
+          operation,
+        );
+        set_information_for_sweep_line_event(
+          &mut sweep_line,
+          pos,
           event_relations,
           operation,
         );

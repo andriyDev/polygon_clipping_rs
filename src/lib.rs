@@ -1129,11 +1129,13 @@ fn compute_contour(
         result_events[result_id + 1]
           .point
           .abs_diff_eq(current_event.point, EPSILON),
-        "Expected event to be connected to an adjacent event. left={}, right={}, result_id={}, event_id={}",
+        "Expected event to be connected to an adjacent event. left={}, right={}, result_id={}, event_id={},\n\nresult_events={:?}\nevent_relations={:?}",
         result_events[result_id + 1].point,
         current_event.point,
         result_id,
         current_event.event_id,
+        result_events,
+        event_relations,
       );
       current_event = &result_events[result_id + 1];
       event_id_to_contour_flags
